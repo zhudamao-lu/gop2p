@@ -27,7 +27,7 @@ func init() {
 	seedAddrs = make(map[*net.UDPAddr]bool, 1024)
 
 	/*
-	addr, err := net.ResolveUDPAddr("udp4", "121.41.85.45:35219")
+	addr, err := net.ResolveUDPAddr("udp4", "121.41.85.45:52475")
 	if err != nil {
 		log.Println(err)
 	}
@@ -98,7 +98,7 @@ func handler(conn *net.UDPConn, rAddr *net.UDPAddr , p []byte) {
 	// 以下注释连接关系 新近客户端为:A 其他客户端为:B 穿透服为:S
 //	switch pc.action {
 	switch p[1] {
-	case 0: 
+	case 0:
 		/*
 			穿透服收到接入请求
 			连接关系:
@@ -145,6 +145,16 @@ func handler(conn *net.UDPConn, rAddr *net.UDPAddr , p []byte) {
 		log.Println(rAddrC)
 
 		// 向对方客户端发信息打洞
+		lAddr, err := net.ResolveUDPAddr("udp4", conn.LocalAddr().String())
+		if err != nil {
+			log.Println(err)
+		}
+
+		_, err = net.DialUDP("udp4", lAddr, rAddrC)
+		if err != nil {
+			log.Println(err)
+		}
+
 		sendData := []byte{head}
 		sendData = append(sendData, byte(2))
 		sendData = append(sendData, []byte("turn")...)
@@ -201,6 +211,16 @@ func handler(conn *net.UDPConn, rAddr *net.UDPAddr , p []byte) {
 		log.Println(rAddrC)
 
 		// 封装数据 Encode 另一客户端地址为data 
+		lAddr, err := net.ResolveUDPAddr("udp4", conn.LocalAddr().String())
+		if err != nil {
+			log.Println(err)
+		}
+
+		_, err = net.DialUDP("udp4", lAddr, rAddrC)
+		if err != nil {
+			log.Println(err)
+		}
+
 		sendData := []byte{head}
 		sendData = append(sendData, byte(4))
 		sendData = append(sendData, rAddr.IP...)
