@@ -26,12 +26,14 @@ func init() {
 	comingAddrs = make(map[*net.UDPAddr]bool, 1024)
 	seedAddrs = make(map[*net.UDPAddr]bool, 1024)
 
-	addr, err := net.ResolveUDPAddr("udp4", "121.41.85.45:32804")
+	/*
+	addr, err := net.ResolveUDPAddr("udp4", "121.41.85.45:35219")
 	if err != nil {
 		log.Println(err)
 	}
 
 	seedAddrs[addr] = true
+	*/
 
 }
 
@@ -93,10 +95,19 @@ func handler(conn *net.UDPConn, rAddr *net.UDPAddr , p []byte) {
 //	pc := protocol{rAddr, p[1]}
 	data := p[2:l - 1]
 
+	// 以下注释连接关系 新近客户端为:A 其他客户端为:B 穿透服为:S
 //	switch pc.action {
 	switch p[1] {
-	case 0:
+	case 0: 
+		/*
+			穿透服收到接入请求
+			连接关系:
+			source:B distination:S
+		*/
+		log.Println("case 0:", data)
 		log.Println(comingAddrs)
+
+		// 穿透服告知之前已接入的节点，有新节点加入
 		for k, _ := range comingAddrs {
 			sendData := []byte{head}
 			sendData = append(sendData, byte(1))
@@ -120,25 +131,115 @@ func handler(conn *net.UDPConn, rAddr *net.UDPAddr , p []byte) {
 		log.Println(string(data))
 	//	log.Println(comingAddrs)
 	case 1:
-		log.Println("case 1", data)
-		log.Println(conn.RemoteAddr())
-		ip := net.IP(data[:16])
-		rAddr := &net.UDPAddr{ip, int(data[16]) << 8 | int(data[17]), ""}
-		log.Println(rAddr)
+		/*
+			收到穿透服务器发来的，新节点加入信息
+			对他进行访问用来打洞，并告知穿透服这一操作
+			连接关系:
+			source:S distination:A data:B
+		*/
+		log.Println("case 1:", data)
 
+		// Decode 对方客户端 addr
+		ip := net.IP(data[:16])
+		rAddrC := &net.UDPAddr{ip, int(data[16]) << 8 | int(data[17]), ""}
+		log.Println(rAddrC)
+
+		// 向对方客户端发信息打洞
 		sendData := []byte{head}
 		sendData = append(sendData, byte(2))
 		sendData = append(sendData, []byte("turn")...)
 		sendData = append(sendData, til)
-		n, err := conn.WriteToUDP(data, rAddr)
+		n, err := conn.WriteToUDP(sendData, rAddrC)
 		if err != nil {
 			log.Println(err)
 			break
 		}
 		log.Println("n:", n)
-		log.Println(conn.RemoteAddr())
+
+		// 告知穿透服已打洞
+		sendData = []byte{head}
+		sendData = append(sendData, byte(3))
+		sendData = append(sendData, []byte("turned")...)
+		sendData = append(sendData, data...)
+		sendData = append(sendData, til)
+		n, err = conn.WriteToUDP(sendData, rAddr)
+		if err != nil {
+			log.Println(err)
+			break
+		}
+		log.Println("n:", n)
 	case 2:
-		log.Println(string(data))
+		/*
+			本次消息由于网络环境可能被忽略
+			第一次
+			如第一次被忽略
+			但是可以帮助打洞
+			连接关系:
+			source:A distination:B 
+
+			如未被忽略则第二次会被忽略
+			第二次
+			连接关系:
+			source:B distination:A
+
+			其中有一次未被忽略的将会收到"hello,brother"消息
+			表示穿透成功，可以在此case中继续后续回调执行上层逻辑
+		*/
+		log.Println("case 2:", string(data))
+	case 3:
+		/*
+			穿透服务收到打洞回馈信息
+			连接关系:
+			source:A distination:S data:B
+		*/
+		log.Println("case 3:", data)
+		log.Println(string(data[:6]))
+
+		// Decode 对方客户端 addr
+		ip := net.IP(data[6:22])
+		rAddrC := &net.UDPAddr{ip, int(data[22]) << 8 | int(data[23]), ""}
+		log.Println(rAddrC)
+
+		// 封装数据 Encode 另一客户端地址为data 
+		sendData := []byte{head}
+		sendData = append(sendData, byte(4))
+		sendData = append(sendData, rAddr.IP...)
+		portH := rAddr.Port >> 8
+		portL := rAddr.Port << 8 >> 8
+		log.Println(rAddr.IP, rAddr.Port)
+		sendData = append(sendData, uint8(portH), uint8(portL))
+		sendData = append(sendData, til)
+		n, err := conn.WriteToUDP(sendData, rAddrC)
+		if err != nil {
+			log.Println(err)
+			break
+		}
+		log.Println("n:", n)
+	case 4:
+		/*
+			客户端收到穿透服告知其他客户端已向自己打洞
+			开始向其他客户端发送消息
+			连接关系:
+			source:S distination:B data:A
+		*/
+		log.Println("case 4:", data)
+
+		// Decode 对方客户端 addr
+		ip := net.IP(data[:16])
+		rAddrC := &net.UDPAddr{ip, int(data[16]) << 8 | int(data[17]), ""}
+		log.Println(rAddrC)
+
+		// 封装数据 发送 "hello,brother"
+		sendData := []byte{head}
+		sendData = append(sendData, byte(2))
+		sendData = append(sendData, []byte("hello,brother")...)
+		sendData = append(sendData, til)
+		n, err := conn.WriteToUDP(sendData, rAddrC)
+		if err != nil {
+			log.Println(err)
+			break
+		}
+		log.Println("n:", n)
 	case 0xff:
 		log.Println(string(data))
 	}
