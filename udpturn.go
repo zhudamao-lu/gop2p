@@ -37,7 +37,7 @@ func init() {
 
 }
 
-func turnBySeedAddr(conn *net.UDPConn, lAddr, rAddr *net.UDPAddr) {
+func udpTurnBySeedAddr(conn *net.UDPConn, lAddr, rAddr *net.UDPAddr) {
 	data := []byte{head}
 	data = append(data, 0)
 	data = append(data, []byte("hello server")...)
@@ -59,11 +59,11 @@ func readFromUDP(conn *net.UDPConn) {
 			break
 		}
 
-		go handler(conn, rAddr, p[:n])
+		go handlerUDPConnection(conn, rAddr, p[:n])
 	}
 }
 
-func StartTurnServer() error {
+func StartUDPTurnServer() error {
 	lAddr := &net.UDPAddr{nil, 0, ""} // 本机服务端口
 	conn, err := net.ListenUDP("udp", lAddr)
 	if err != nil {
@@ -74,7 +74,7 @@ func StartTurnServer() error {
 	log.Println("localAddr:", conn.LocalAddr())
 
 	for k, _ := range seedAddrs {
-		go turnBySeedAddr(conn, lAddr, k)
+		go udpTurnBySeedAddr(conn, lAddr, k)
 	}
 
 	readFromUDP(conn)
@@ -82,7 +82,7 @@ func StartTurnServer() error {
 	return nil
 }
 
-func handler(conn *net.UDPConn, rAddr *net.UDPAddr , p []byte) {
+func handlerUDPConnection(conn *net.UDPConn, rAddr *net.UDPAddr , p []byte) {
 	log.Println("remoteAddr:", rAddr)
 	l := len(p)
 	fmt.Printf("%08b, %v, %08b\n", p[0], p[1:l - 1], p[l - 1])

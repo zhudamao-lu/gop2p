@@ -28,48 +28,51 @@ func Start(port string) error {
 			continue
 		}
 
-		go func() {
-			log.Println("get tcp:", conn.RemoteAddr())
+		go tcpHandle(conn.(*net.TCPConn))
 
-			originData := make([]byte, 0, 65536)
-			tcpReadBuffer := make([]byte, 4096)
-		//	dataPackage := []byte{}
 
-			for {
-				n, err := conn.Read(tcpReadBuffer)
-				if err != nil {
-					log.Println(err)
-					break
-				}
-
-				originData = append(originData, tcpReadBuffer[:n]...)
-			}
-			log.Println(originData, len(originData))
-
-			var i, length, command int
-
-			for i < len(originData) {
-				length = int(uint8(originData[i])) << 24 | int(uint8(originData[i + 1])) << 16 | int(uint8(originData[i + 2])) << 8 | int(uint8(originData[i + 3])) // body长度
-				command = int(uint8(originData[i + 4])) << 24 | int(uint8(originData[i + 5])) << 16 | int(uint8(originData[i + 6])) << 8 | int(uint8(originData[i + 7])) // 命令号
-
-				if length < 0 {
-					log.Println("Error length:", length)
-					break
-				}
-
-				i += PACKAGE_HEAD_LEN
-
-				data := originData[i : i + length]
-				i += length
-
-				log.Println(length, command, i)
-				log.Println(string(data))
-			}
-
-			log.Println("recieved")
-		}()
 	}
 }
 
 func Decode() {
+}
+
+func tcpHandle(conn *net.TCPConn) {
+	log.Println("get tcp:", conn.RemoteAddr())
+
+	originData := make([]byte, 0, 65536)
+	tcpReadBuffer := make([]byte, 4096)
+
+	for {
+		n, err := conn.Read(tcpReadBuffer)
+		if err != nil {
+			log.Println(err)
+			break
+		}
+
+		originData = append(originData, tcpReadBuffer[:n]...)
+	}
+	log.Println(originData, len(originData))
+
+	var i, length, command int
+
+	for i < len(originData) {
+		length = int(uint8(originData[i])) << 24 | int(uint8(originData[i + 1])) << 16 | int(uint8(originData[i + 2])) << 8 | int(uint8(originData[i + 3])) // body长度
+		command = int(uint8(originData[i + 4])) << 24 | int(uint8(originData[i + 5])) << 16 | int(uint8(originData[i + 6])) << 8 | int(uint8(originData[i + 7])) // 命令号
+
+		if length < 0 {
+			log.Println("Error length:", length)
+			break
+		}
+
+		i += PACKAGE_HEAD_LEN
+
+		data := originData[i : i + length]
+		i += length
+
+		log.Println(length, command, i)
+		log.Println(string(data))
+	}
+
+	log.Println("recieved")
 }

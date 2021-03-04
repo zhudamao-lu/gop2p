@@ -5,7 +5,14 @@ import (
 )
 
 func TestMain(t *testing.T) {
-	err := StartTurnServer()
+	/*
+	err := StartUDPTurnServer()
+	if err != nil {
+		t.Error(err)
+	}
+	*/
+
+	err := StartTCPTurnServer()
 	if err != nil {
 		t.Error(err)
 	}
