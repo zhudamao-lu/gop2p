@@ -1,25 +1,45 @@
-func genSockReusePort(network, address string) (conn *net.UDPConn, err error) {
-	cfgFn := func(network, address string, conn syscall.RawConn) (err error) {
-		fn := func(fd uintptr) {
-			err = syscall.SetsockoptInt(syscall.Handle(fd), syscall.SOL_SOCKET, 0xf, 1) // 0xf = SO_REUSEPORT
-			if err != nil {
-				return
-			}
-		}
+package gop2p
 
-		err = conn.Control(fn)
+import (
+	"syscall"
+	"errors"
+
+//	"golang.org/x/sys/windows"
+	"golang.org/x/sys/unix"
+)
+
+func controlSockReusePortUnix(network, address string, c syscall.RawConn) (err error) {
+	return c.Control(func(fd uintptr) {
+		// SO_REUSEADDR
+		unix.SetsockoptInt(int(fd), unix.SOL_SOCKET, unix.SO_REUSEADDR, 1)
 		if err != nil {
-			return err
+			panic(err)
 		}
 
-		return nil
+		// SO_REUSEPORT
+		unix.SetsockoptInt(int(fd), unix.SOL_SOCKET, unix.SO_REUSEPORT, 1)
+		if err != nil {
+			panic(err)
+		}
+	})
+}
+
+/*
+func controlSockReusePortWindow(network, address string, c syscall.RawConn) (err error) {
+	return c.Control(func(fd uintptr) {
+		err = windows.SetsockoptInt(windows.Handle(fd), windows.SOL_SOCKET, windows.SO_REUSEADDR, 1)
+	})
+}
+*/
+
+func bytesToInt(b []byte) (int, error) {
+	if len(b) != 4 {
+		return 0, errors.New("bytes length must be 4")
 	}
 
-	lc := net.ListenConfig{Control: cfgFn}
-	lp, err := lc.ListenPacket(context.Background(), "udp", address)
-	if err != nil {
-		return nil, err
-	}
-	conn = lp.(*net.UDPConn)
-	return conn, nil
+	return int(uint8(b[0])) << 24 | int(uint8(b[1])) << 16 | int(uint8(b[2])) << 8 | int(uint8(b[3])), nil
+}
+
+func intToBytes(i int) ([]byte) {
+	return []byte{uint8(i >> 24), uint8(i << 8 >> 24), uint8(i << 16 >> 24), uint8(i << 24 >> 24)}
 }
