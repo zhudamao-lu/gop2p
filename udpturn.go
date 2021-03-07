@@ -129,7 +129,6 @@ func handlerUDPConnection(conn *net.UDPConn, rAddr *net.UDPAddr , p []byte) {
 
 		comingAddrs[rAddr] = true
 		log.Println(string(data))
-	//	log.Println(comingAddrs)
 	case 1:
 		/*
 			收到穿透服务器发来的，新节点加入信息
