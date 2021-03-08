@@ -22,16 +22,21 @@ const (
 	PACKET_HEAD_LEN = 0x14 // 包头固定长度 12 + 4 + 4 = 20
 )
 
-var comingConns = make(map[*net.TCPConn]bool, 1024)
-var seedAddrs = make(map[*net.TCPAddr]bool, 1024)
+var (
+	seedAddrs = make(map[*net.TCPAddr]bool, 1024)
+	comingConns = make(map[*net.TCPConn]bool, 1024)
+	peers = make(map[*net.TCPConn]bool, 1024)
+)
 
-func ConnectSeed(lAddr *net.TCPAddr) error {
-	addr, err := net.ResolveTCPAddr("tcp", "121.41.85.45:39433")
-	if err != nil {
-		return err
+func ConnectSeed(lAddr *net.TCPAddr, seedAddrsStr []string) error {
+	for _, v := range seedAddrsStr {
+		addr, err := net.ResolveTCPAddr("tcp", v)
+		if err != nil {
+			return err
+		}
+
+		seedAddrs[addr] = true
 	}
-
-	seedAddrs[addr] = true
 
 	for k, _ := range seedAddrs {
 		log.Println(k)
@@ -64,7 +69,7 @@ func ConnectSeed(lAddr *net.TCPAddr) error {
 	return nil
 }
 
-func StartTCPTurnServer() error {
+func StartTCPTurnServer(seedAddrsStr []string) error {
 	log.Println(runtime.GOOS)
 	var listenConfig net.ListenConfig
 	listenConfig = net.ListenConfig{Control: controlSockReusePortUnix}
@@ -83,7 +88,7 @@ func StartTCPTurnServer() error {
 	}
 	log.Println(lAddr)
 
-	ConnectSeed(lAddr)
+	ConnectSeed(lAddr, seedAddrsStr)
 
 	listenAccept(ln)
 
@@ -192,8 +197,9 @@ func tcpHandle(command int, data []byte, conn *net.TCPConn) {
 			log.Println("k:", k.RemoteAddr())
 			n, err := k.Write(sendData)
 			if err != nil {
-				log.Println(err)
-				return
+				log.Println(err, "xxxxxxxxxxxxxxxxx")
+				delete(comingConns, k)
+				continue
 			}
 			log.Println("n:", n)
 		}
@@ -280,6 +286,7 @@ func tcpHandle(command int, data []byte, conn *net.TCPConn) {
 		}
 
 		log.Println("节点连接成功")
+		peers[conn] = true
 
 	/*
 		穿透服务收到打洞回馈信息
@@ -349,6 +356,8 @@ func tcpHandle(command int, data []byte, conn *net.TCPConn) {
 			break
 		}
 		log.Println("n:", n)
+
+//	case ACTION_CONNECTION_API:
 
 
 	/*

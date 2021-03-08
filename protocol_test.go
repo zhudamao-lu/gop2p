@@ -12,7 +12,10 @@ func TestMain(t *testing.T) {
 	}
 	*/
 
-	err := StartTCPTurnServer()
+	seeds := []string {
+		"121.41.85.45:33815",
+	}
+	err := StartTCPTurnServer(seeds)
 	if err != nil {
 		t.Error(err)
 	}
