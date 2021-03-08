@@ -13,6 +13,7 @@ const (
 	ACTION_CONNECTION_TURN = 0x02 // 收到则穿透成功
 	ACTION_CONNECTION_TURNED = 0x03 // 服务器被告知已做过一次穿透，并通知另一客户端反向访问
 	ACTION_CONNECTION_NOTICE2 = 0x04 // 第二次穿透访问
+	ACTION_CONNECTION_LOGIC = 0x05 // peer to peer 之间处理正式通信内容
 
 	PACKET_IDENTIFY = "--TCPHEADX--" // 包开始标识符
 	PACKET_IDENTIFY_LEN = 0xc // 包开始标识符长度 12
@@ -28,7 +29,7 @@ var (
 	peers = make(map[*net.TCPConn]bool, 1024)
 )
 
-func ConnectSeed(lAddr *net.TCPAddr, seedAddrsStr []string) error {
+func ConnectSeed(lAddr *net.TCPAddr, seedAddrsStr []string, processLogic func(int, []byte, *net.TCPConn) error) error {
 	for _, v := range seedAddrsStr {
 		addr, err := net.ResolveTCPAddr("tcp", v)
 		if err != nil {
@@ -57,7 +58,7 @@ func ConnectSeed(lAddr *net.TCPAddr, seedAddrsStr []string) error {
 		data = append(data, body...)
 		log.Println(data)
 
-		go handleTCPConnection(connc.(*net.TCPConn))
+		go handleTCPConnection(connc.(*net.TCPConn), processLogic)
 		n, err := connc.Write(data)
 		if err != nil {
 			log.Println(err)
@@ -69,7 +70,7 @@ func ConnectSeed(lAddr *net.TCPAddr, seedAddrsStr []string) error {
 	return nil
 }
 
-func StartTCPTurnServer(seedAddrsStr []string) error {
+func StartTCPTurnServer(seedAddrsStr []string, processLogic func(int, []byte, *net.TCPConn) error) error {
 	log.Println(runtime.GOOS)
 	var listenConfig net.ListenConfig
 	listenConfig = net.ListenConfig{Control: controlSockReusePortUnix}
@@ -88,14 +89,14 @@ func StartTCPTurnServer(seedAddrsStr []string) error {
 	}
 	log.Println(lAddr)
 
-	ConnectSeed(lAddr, seedAddrsStr)
+	ConnectSeed(lAddr, seedAddrsStr, processLogic)
 
-	listenAccept(ln)
+	listenAccept(ln, processLogic)
 
 	return nil
 }
 
-func handleTCPConnection(conn *net.TCPConn) {
+func handleTCPConnection(conn *net.TCPConn, processLogic func(int, []byte, *net.TCPConn) error) {
 	defer conn.Close()
 
 	data := make([]byte, 0, 4096)
@@ -122,7 +123,7 @@ func handleTCPConnection(conn *net.TCPConn) {
 			bodyEnd := PACKET_HEAD_LEN + bodyLength
 			if bodyEnd  <= len(data) {
 				body := data[PACKET_HEAD_LEN : bodyEnd]
-				tcpHandle(command, body, conn)
+				tcpHandle(command, body, conn, processLogic)
 				data = data[PACKET_HEAD_LEN + bodyLength :]
 				continue
 			}
@@ -134,7 +135,7 @@ func handleTCPConnection(conn *net.TCPConn) {
 //	log.Println(data)
 }
 
-func listenAccept(ln net.Listener) {
+func listenAccept(ln net.Listener, processLogic func(int, []byte, *net.TCPConn) error) {
 	defer ln.Close()
 	for {
 		conn, err := ln.Accept()
@@ -144,7 +145,7 @@ func listenAccept(ln net.Listener) {
 		}
 		log.Println(conn.RemoteAddr())
 
-		go handleTCPConnection(conn.(*net.TCPConn))
+		go handleTCPConnection(conn.(*net.TCPConn), processLogic)
 	}
 }
 
@@ -164,7 +165,7 @@ func DecodeData(data []byte) (int, int, error) {
 	return command, bodyLength, nil
 }
 
-func tcpHandle(command int, data []byte, conn *net.TCPConn) {
+func tcpHandle(command int, data []byte, conn *net.TCPConn, processLogic func(int, []byte, *net.TCPConn) error) {
 	switch command {
 	/*
 		穿透服收到接入请求
@@ -233,6 +234,8 @@ func tcpHandle(command int, data []byte, conn *net.TCPConn) {
 			log.Println(err)
 		}
 
+		go handleTCPConnection(connc.(*net.TCPConn), processLogic)
+
 		body := []byte("turn...")
 		sendData := []byte(PACKET_IDENTIFY)
 		sendData = append(sendData, intToBytes(ACTION_CONNECTION_TURN)...)
@@ -287,6 +290,10 @@ func tcpHandle(command int, data []byte, conn *net.TCPConn) {
 
 		log.Println("节点连接成功")
 		peers[conn] = true
+
+	//	sendDemo(conn, tt)
+
+		// 用于测试发送正式数据
 
 	/*
 		穿透服务收到打洞回馈信息
@@ -357,8 +364,26 @@ func tcpHandle(command int, data []byte, conn *net.TCPConn) {
 		}
 		log.Println("n:", n)
 
-//	case ACTION_CONNECTION_API:
+	/*
+		点对点正式通信，此时穿透服已不需要
+		连接关系:
+		source:A distination:B
+		or
+		source:B distination:A
+	*/
+	case ACTION_CONNECTION_LOGIC:
+		api, err := bytesToInt(data[:4])
+		if err != nil {
+			log.Println(err)
+			break
+		}
 
+		log.Println("api:", api)
+		err = processLogic(api, data[4:], conn)
+		if err != nil {
+			log.Println(err)
+			break
+		}
 
 	/*
 		用于测试TCP
