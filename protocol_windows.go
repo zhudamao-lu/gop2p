@@ -1,9 +1,9 @@
+//	+build windows
+
 /*
 	Copyright 2021 Mosalut and (此处将为公司名称). All rights reserved.
 	Use of this source code is governed by a BSD-style
 	license that can be found in the LICENSE file.
-
-	+build windows
 
 	github.com/mosalut/gop2p包，提供了一组底层的TCP peer to peer网络交互功能
 	主要包括穿透、新增节点通知、节点之间交互等功能
@@ -13,7 +13,6 @@
 package gop2p
 
 import (
-	"runtime"
 	"context"
 	"net"
 	"log"

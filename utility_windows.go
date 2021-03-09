@@ -1,6 +1,5 @@
-/*
-	+build windows
-*/
+//	+build windows
+
 package gop2p
 
 import (
@@ -10,7 +9,7 @@ import (
 	"golang.org/x/sys/windows"
 )
 
-func controlSockReusePortWindow(network, address string, c syscall.RawConn) (err error) {
+func controlSockReusePortWindows(network, address string, c syscall.RawConn) (err error) {
 	return c.Control(func(fd uintptr) {
 		err = windows.SetsockoptInt(windows.Handle(fd), windows.SOL_SOCKET, windows.SO_REUSEADDR, 1)
 	})

@@ -1,6 +1,5 @@
-/*
-	+build !windows
-*/
+//	+build !windows
+
 package gop2p
 
 import (
