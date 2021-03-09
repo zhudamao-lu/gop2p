@@ -1,3 +1,13 @@
+/*
+	Copyright 2021 Mosalut and (此处将为公司名称). All rights reserved.
+	Use of this source code is governed by a BSD-style
+	license that can be found in the LICENSE file.
+
+	github.com/mosalut/gop2p包，提供了一组底层的TCP peer to peer网络交互功能
+	主要包括穿透、新增节点通知、节点之间交互等功能
+
+	通常，你只需要调用 StartTCPTurnServer 方法即可新建或加入到一个peer to peer网络
+*/
 package gop2p
 
 import (
@@ -24,12 +34,15 @@ const (
 )
 
 var (
-	seedAddrs = make(map[*net.TCPAddr]bool, 1024)
-	comingConns = make(map[*net.TCPConn]bool, 1024)
-	peers = make(map[*net.TCPConn]bool, 1024)
+	seedAddrs = make(map[*net.TCPAddr]bool, 1024) // 种子节点地址map
+	comingConns = make(map[*net.TCPConn]bool, 1024) // 自身看作穿透服时，新连接map
+	peers = make(map[*net.TCPConn]bool, 1024) // 自身看作客户端时，新连接map
 )
 
-func ConnectSeed(lAddr *net.TCPAddr, seedAddrsStr []string, processLogic func(int, []byte, *net.TCPConn) error) error {
+/*
+	连接种子节点
+*/
+func connectSeed(lAddr *net.TCPAddr, seedAddrsStr []string, processLogic func(int, []byte, *net.TCPConn) error) error {
 	for _, v := range seedAddrsStr {
 		addr, err := net.ResolveTCPAddr("tcp", v)
 		if err != nil {
@@ -70,6 +83,20 @@ func ConnectSeed(lAddr *net.TCPAddr, seedAddrsStr []string, processLogic func(in
 	return nil
 }
 
+/*
+	StartTCPTurnServer 返回一个 error.
+	参数 seedAddrsStr 接收一个字符串列表作为一批种子地址,
+	其中的任意一个如果转换为 *net.TCPAddr 失败, 都会返回一个 error,
+	并且中断后续执行.
+
+	该 func 会设置端口重用, 在同一端口监听和拨号. 当发生监听、拨号类问题,
+	也会返回一个 error.
+
+	参数 processLogic 接收一个 func, 该 func 是在穿透成功建立点对点连接,
+	并且收到对方节点传来的数据时，根据起第一个参数(int 类型，可看作API号),
+	做出的相应动作. 第一个参数将会是对方传来数据的body中前4个字节.
+	该func 由用户实现, 并传入 StartTCPTurnServer.
+*/
 func StartTCPTurnServer(seedAddrsStr []string, processLogic func(int, []byte, *net.TCPConn) error) error {
 	log.Println(runtime.GOOS)
 	var listenConfig net.ListenConfig
@@ -89,7 +116,7 @@ func StartTCPTurnServer(seedAddrsStr []string, processLogic func(int, []byte, *n
 	}
 	log.Println(lAddr)
 
-	ConnectSeed(lAddr, seedAddrsStr, processLogic)
+	connectSeed(lAddr, seedAddrsStr, processLogic)
 
 	listenAccept(ln, processLogic)
 
