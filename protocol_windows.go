@@ -3,6 +3,8 @@
 	Use of this source code is governed by a BSD-style
 	license that can be found in the LICENSE file.
 
+	+build windows
+
 	github.com/mosalut/gop2p包，提供了一组底层的TCP peer to peer网络交互功能
 	主要包括穿透、新增节点通知、节点之间交互等功能
 
@@ -55,8 +57,7 @@ func connectSeed(lAddr *net.TCPAddr, seedAddrsStr []string, processLogic func(in
 	for k, _ := range seedAddrs {
 		log.Println(k)
 
-		d := net.Dialer {Control: controlSockReusePortUnix, LocalAddr: lAddr}
-	//	d := net.Dialer {Control: controlSockReusePortWindow, LocalAddr: lAddr}
+		d := net.Dialer {Control: controlSockReusePortWindows, LocalAddr: lAddr}
 		connc, err := d.Dial(k.Network(), k.String())
 		if err != nil {
 			log.Println(err)
@@ -98,10 +99,10 @@ func connectSeed(lAddr *net.TCPAddr, seedAddrsStr []string, processLogic func(in
 	该func 由用户实现, 并传入 StartTCPTurnServer.
 */
 func StartTCPTurnServer(seedAddrsStr []string, processLogic func(int, []byte, *net.TCPConn) error) error {
-	log.Println(runtime.GOOS)
+//	log.Println(runtime.GOOS)
 	var listenConfig net.ListenConfig
-	listenConfig = net.ListenConfig{Control: controlSockReusePortUnix}
-//	listenConfig = net.ListenConfig{Control: controlSockReusePortWindow}
+
+	listenConfig = net.ListenConfig{Control: controlSockReusePortWindows}
 
 //	lAddr := &net.TCPAddr{nil, 1024, ""}
 	ln, err := listenConfig.Listen(context.Background(), "tcp", "")
@@ -255,7 +256,7 @@ func tcpHandle(command int, data []byte, conn *net.TCPConn, processLogic func(in
 			log.Println(err)
 		}
 
-		d := net.Dialer {Control: controlSockReusePortUnix, LocalAddr: lAddr}
+		d := net.Dialer {Control: controlSockReusePortWindows, LocalAddr: lAddr}
 		connc, err := d.Dial(rAddrC.Network(), rAddrC.String())
 		if err != nil {
 			log.Println(err)

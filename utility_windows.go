@@ -1,36 +1,20 @@
+/*
+	+build windows
+*/
 package gop2p
 
 import (
 	"syscall"
 	"errors"
 
-//	"golang.org/x/sys/windows"
-	"golang.org/x/sys/unix"
+	"golang.org/x/sys/windows"
 )
 
-func controlSockReusePortUnix(network, address string, c syscall.RawConn) (err error) {
-	return c.Control(func(fd uintptr) {
-		// SO_REUSEADDR
-		unix.SetsockoptInt(int(fd), unix.SOL_SOCKET, unix.SO_REUSEADDR, 1)
-		if err != nil {
-			panic(err)
-		}
-
-		// SO_REUSEPORT
-		unix.SetsockoptInt(int(fd), unix.SOL_SOCKET, unix.SO_REUSEPORT, 1)
-		if err != nil {
-			panic(err)
-		}
-	})
-}
-
-/*
 func controlSockReusePortWindow(network, address string, c syscall.RawConn) (err error) {
 	return c.Control(func(fd uintptr) {
 		err = windows.SetsockoptInt(windows.Handle(fd), windows.SOL_SOCKET, windows.SO_REUSEADDR, 1)
 	})
 }
-*/
 
 func bytesToInt(b []byte) (int, error) {
 	if len(b) != 4 {
