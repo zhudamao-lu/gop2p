@@ -9,17 +9,10 @@ import (
 
 var tt *testing.T
 func TestMain(t *testing.T) {
-	/*
-	err := StartUDPTurnServer()
-	if err != nil {
-		t.Error(err)
-	}
-	*/
-
 	tt = t
 
 	seeds := []string {
-		"121.41.85.45:39279",
+	//	"121.41.85.45:39279",
 	}
 
 	go sendDemo(t)
@@ -28,15 +21,6 @@ func TestMain(t *testing.T) {
 	if err != nil {
 		t.Error(err)
 	}
-
-	/*
-	log.Println("go on ...")
-	for {
-		select {
-		case logicData := <-lDch:
-			log.Println(logicData)
-	}
-	*/
 }
 
 func processLogic(api int, data []byte, conn *net.TCPConn) error {

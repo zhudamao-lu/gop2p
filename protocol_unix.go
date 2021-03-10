@@ -98,11 +98,9 @@ func connectSeed(lAddr *net.TCPAddr, seedAddrsStr []string, processLogic func(in
 	该func 由用户实现, 并传入 StartTCPTurnServer.
 */
 func StartTCPTurnServer(seedAddrsStr []string, processLogic func(int, []byte, *net.TCPConn) error) error {
-//	log.Println(runtime.GOOS)
 	var listenConfig net.ListenConfig
 	listenConfig = net.ListenConfig{Control: controlSockReusePortUnix}
 
-//	lAddr := &net.TCPAddr{nil, 1024, ""}
 	ln, err := listenConfig.Listen(context.Background(), "tcp", "")
 	if err != nil {
 		return err
@@ -192,6 +190,8 @@ func DecodeData(data []byte) (int, int, error) {
 }
 
 func tcpHandle(command int, data []byte, conn *net.TCPConn, processLogic func(int, []byte, *net.TCPConn) error) {
+	defer handlePanic("tcpHandle")
+
 	switch command {
 	/*
 		穿透服收到接入请求
@@ -416,5 +416,12 @@ func tcpHandle(command int, data []byte, conn *net.TCPConn, processLogic func(in
 	*/
 	case 0xffffffff:
 		log.Println(string(data))
+	}
+}
+
+func handlePanic(funcname string) {
+	err := recover()
+	if err != nil {
+		log.Println("in", funcname, "panic:", err)
 	}
 }
