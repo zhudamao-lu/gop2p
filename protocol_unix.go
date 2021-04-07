@@ -404,6 +404,7 @@ func tcpHandle(command int, data []byte, conn *net.TCPConn, afterStart func() er
 			break
 		}
 		log.Println("n:", n)
+		peers[conn] = true
 
 	/*
 		点对点正式通信，此时穿透服已不需要
