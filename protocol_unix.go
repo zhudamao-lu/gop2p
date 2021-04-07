@@ -13,8 +13,6 @@
 package gop2p
 
 import (
-	"encoding/gob"
-	"bytes"
 	"context"
 	"net"
 	"log"
@@ -439,42 +437,47 @@ func tcpHandle(command int, data []byte, conn *net.TCPConn, afterStart func() er
 	}
 }
 
-func Send(conn *net.TCPConn, api int, body interface{}) error {
-	buffer := &bytes.Buffer{}
-	encoder := gob.NewEncoder(buffer)
-	err := encoder.Encode(body)
-	if err != nil {
-		return err
-	}
+/*
+	两个 peer 连接后用此方法发送数据
 
-	data := append(intToBytes(api), buffer.Bytes()...)
+	conn 是与对方的连接
+	api 是被对方识别的功能号
+	body 是从某个struct转来的字节切片
 
-	err = send(conn, data)
+	如果发送时有任何网络错误将返回一个 error 类型的值
+	否则返回 nil
+*/
+func Send(conn *net.TCPConn, api int, body []byte) error {
+	data := append(intToBytes(api), body...)
+
+	err := send(conn, data)
 	if err != nil {
+		delete(peers, conn)
 		return err
 	}
 
 	return nil
 }
 
-func Broadcast(api int, body interface{}) error {
-	buffer := &bytes.Buffer{}
-	encoder := gob.NewEncoder(buffer)
-	err := encoder.Encode(body)
-	if err != nil {
-		return err
-	}
+/*
+	Broadcast 函数相当于多次执行了Send方法
+	达到向所有存在的 peer 发送相同的数据
 
-	data := append(intToBytes(api), buffer.Bytes()...)
+	如果某一次个发送出现了错误，他将打印这个错误
+	但是不会退出，然后继续向之后的连接发送消息
+*/
+func Broadcast(api int, body []byte) {
+	var err error
+	data := append(intToBytes(api), body...)
 
 	for conn, _ := range peers {
 		err = send(conn, data)
 		if err != nil {
-			return err
+			delete(peers, conn)
+			log.Println(err)
+			continue
 		}
 	}
-
-	return nil
 }
 
 func send(conn *net.TCPConn, data []byte) error {

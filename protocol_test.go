@@ -26,7 +26,7 @@ func TestMain(t *testing.T) {
 func syncron() error {
 	log.Println("conns:", GetPeers())
 	for peer, _ := range GetPeers() {
-		err := Send(peer, 5, "aaa")
+		err := Send(peer, 5, []byte("aaa"))
 		if err != nil {
 			return err
 		}
