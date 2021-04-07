@@ -13,6 +13,8 @@
 package gop2p
 
 import (
+	"encoding/gob"
+	"bytes"
 	"context"
 	"net"
 	"log"
@@ -39,6 +41,14 @@ var (
 	comingConns = make(map[*net.TCPConn]bool, 1024) // 自身看作穿透服时，新连接map
 	peers = make(map[*net.TCPConn]bool, 1024) // 自身看作客户端时，新连接map
 )
+
+func GetPeers() map[*net.TCPConn]bool {
+	return peers
+}
+
+func GetSeedAddrs() map[*net.TCPAddr]bool {
+	return seedAddrs
+}
 
 /*
 	连接种子节点
@@ -138,7 +148,7 @@ func handleTCPConnection(conn *net.TCPConn, processLogic func(int, []byte, *net.
 	//	log.Println(string(data))
 
 		for string(data[:PACKET_IDENTIFY_LEN]) == PACKET_IDENTIFY {
-			command, bodyLength, err = DecodeData(data)
+			command, bodyLength, err = decodeData(data)
 			if err != nil {
 				log.Println(err)
 				break
@@ -173,7 +183,7 @@ func listenAccept(ln net.Listener, processLogic func(int, []byte, *net.TCPConn) 
 	}
 }
 
-func DecodeData(data []byte) (int, int, error) {
+func decodeData(data []byte) (int, int, error) {
 	command, err := bytesToInt(data[PACKET_IDENTIFY_LEN : PACKET_COMMAND_END_LEN])
 	if err != nil {
 		data = data[0:0]
@@ -224,7 +234,6 @@ func tcpHandle(command int, data []byte, conn *net.TCPConn, processLogic func(in
 			log.Println("k:", k.RemoteAddr())
 			n, err := k.Write(sendData)
 			if err != nil {
-				log.Println(err, "xxxxxxxxxxxxxxxxx")
 				delete(comingConns, k)
 				continue
 			}
@@ -417,6 +426,37 @@ func tcpHandle(command int, data []byte, conn *net.TCPConn, processLogic func(in
 	case 0xffffffff:
 		log.Println(string(data))
 	}
+}
+
+func Send(conn *net.TCPConn, api int, body interface{}) error {
+	buffer := &bytes.Buffer{}
+	encoder := gob.NewEncoder(buffer)
+	err := encoder.Encode(body)
+	if err != nil {
+		return err
+	}
+
+	data := append(intToBytes(api), buffer.Bytes()...)
+
+	err = send(conn, data)
+	if err != nil {
+		return err
+	}
+
+	return nil
+}
+
+func send(conn *net.TCPConn, data []byte) error {
+	sendData := []byte(PACKET_IDENTIFY)
+	sendData = append(sendData, intToBytes(ACTION_CONNECTION_LOGIC)...)
+	sendData = append(sendData, intToBytes(len(data))...)
+	sendData = append(sendData, data...)
+	_, err := conn.Write(sendData)
+	if err != nil {
+		return err
+	}
+
+	return nil
 }
 
 func handlePanic(funcname string) {
