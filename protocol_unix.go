@@ -446,6 +446,26 @@ func Send(conn *net.TCPConn, api int, body interface{}) error {
 	return nil
 }
 
+func Broadcast(api int, body interface{}) error {
+	buffer := &bytes.Buffer{}
+	encoder := gob.NewEncoder(buffer)
+	err := encoder.Encode(body)
+	if err != nil {
+		return err
+	}
+
+	data := append(intToBytes(api), buffer.Bytes()...)
+
+	for conn, _ := range peers {
+		err = send(conn, data)
+		if err != nil {
+			return err
+		}
+	}
+
+	return nil
+}
+
 func send(conn *net.TCPConn, data []byte) error {
 	sendData := []byte(PACKET_IDENTIFY)
 	sendData = append(sendData, intToBytes(ACTION_CONNECTION_LOGIC)...)
