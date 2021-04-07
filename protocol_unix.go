@@ -283,6 +283,7 @@ func tcpHandle(command int, data []byte, conn *net.TCPConn, afterStart func() er
 			break
 		}
 		log.Println("n:", n)
+		peers[conn] = true
 
 		// 告知穿透服已打洞
 		body = []byte("turned...")
@@ -423,6 +424,7 @@ func tcpHandle(command int, data []byte, conn *net.TCPConn, afterStart func() er
 		}
 
 		log.Println("api:", api)
+		log.Println(data[:4], "--", data[4:])
 		err = processLogic(api, data[4:], conn)
 		if err != nil {
 			log.Println(err)
