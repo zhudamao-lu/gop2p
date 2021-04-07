@@ -53,7 +53,7 @@ func GetSeedAddrs() map[*net.TCPAddr]bool {
 /*
 	连接种子节点
 */
-func connectSeed(lAddr *net.TCPAddr, seedAddrsStr []string, processLogic func(int, []byte, *net.TCPConn) error) error {
+func connectSeed(lAddr *net.TCPAddr, seedAddrsStr []string, afterStart func() error, processLogic func(int, []byte, *net.TCPConn) error) error {
 	for _, v := range seedAddrsStr {
 		addr, err := net.ResolveTCPAddr("tcp", v)
 		if err != nil {
@@ -81,7 +81,7 @@ func connectSeed(lAddr *net.TCPAddr, seedAddrsStr []string, processLogic func(in
 		data = append(data, body...)
 		log.Println(data)
 
-		go handleTCPConnection(connc.(*net.TCPConn), processLogic)
+		go handleTCPConnection(connc.(*net.TCPConn), afterStart, processLogic)
 		n, err := connc.Write(data)
 		if err != nil {
 			log.Println(err)
@@ -107,7 +107,7 @@ func connectSeed(lAddr *net.TCPAddr, seedAddrsStr []string, processLogic func(in
 	做出的相应动作. 第一个参数将会是对方传来数据的body中前4个字节.
 	该func 由用户实现, 并传入 StartTCPTurnServer.
 */
-func StartTCPTurnServer(seedAddrsStr []string, processLogic func(int, []byte, *net.TCPConn) error) error {
+func StartTCPTurnServer(seedAddrsStr []string, afterStart func() error, processLogic func(int, []byte, *net.TCPConn) error) error {
 	var listenConfig net.ListenConfig
 	listenConfig = net.ListenConfig{Control: controlSockReusePortUnix}
 
@@ -123,14 +123,14 @@ func StartTCPTurnServer(seedAddrsStr []string, processLogic func(int, []byte, *n
 	}
 	log.Println(lAddr)
 
-	connectSeed(lAddr, seedAddrsStr, processLogic)
+	connectSeed(lAddr, seedAddrsStr, afterStart, processLogic)
 
-	listenAccept(ln, processLogic)
+	listenAccept(ln, afterStart, processLogic)
 
 	return nil
 }
 
-func handleTCPConnection(conn *net.TCPConn, processLogic func(int, []byte, *net.TCPConn) error) {
+func handleTCPConnection(conn *net.TCPConn, afterStart func() error, processLogic func(int, []byte, *net.TCPConn) error) {
 	defer conn.Close()
 
 	data := make([]byte, 0, 4096)
@@ -157,7 +157,7 @@ func handleTCPConnection(conn *net.TCPConn, processLogic func(int, []byte, *net.
 			bodyEnd := PACKET_HEAD_LEN + bodyLength
 			if bodyEnd  <= len(data) {
 				body := data[PACKET_HEAD_LEN : bodyEnd]
-				tcpHandle(command, body, conn, processLogic)
+				tcpHandle(command, body, conn, afterStart, processLogic)
 				data = data[PACKET_HEAD_LEN + bodyLength :]
 				continue
 			}
@@ -169,7 +169,7 @@ func handleTCPConnection(conn *net.TCPConn, processLogic func(int, []byte, *net.
 //	log.Println(data)
 }
 
-func listenAccept(ln net.Listener, processLogic func(int, []byte, *net.TCPConn) error) {
+func listenAccept(ln net.Listener, afterStart func() error, processLogic func(int, []byte, *net.TCPConn) error) {
 	defer ln.Close()
 	for {
 		conn, err := ln.Accept()
@@ -179,7 +179,7 @@ func listenAccept(ln net.Listener, processLogic func(int, []byte, *net.TCPConn) 
 		}
 		log.Println(conn.RemoteAddr())
 
-		go handleTCPConnection(conn.(*net.TCPConn), processLogic)
+		go handleTCPConnection(conn.(*net.TCPConn), afterStart, processLogic)
 	}
 }
 
@@ -199,7 +199,7 @@ func decodeData(data []byte) (int, int, error) {
 	return command, bodyLength, nil
 }
 
-func tcpHandle(command int, data []byte, conn *net.TCPConn, processLogic func(int, []byte, *net.TCPConn) error) {
+func tcpHandle(command int, data []byte, conn *net.TCPConn, afterStart func() error, processLogic func(int, []byte, *net.TCPConn) error) {
 	defer handlePanic("tcpHandle")
 
 	switch command {
@@ -269,7 +269,7 @@ func tcpHandle(command int, data []byte, conn *net.TCPConn, processLogic func(in
 			log.Println(err)
 		}
 
-		go handleTCPConnection(connc.(*net.TCPConn), processLogic)
+		go handleTCPConnection(connc.(*net.TCPConn), afterStart, processLogic)
 
 		body := []byte("turn...")
 		sendData := []byte(PACKET_IDENTIFY)

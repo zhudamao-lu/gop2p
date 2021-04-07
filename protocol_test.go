@@ -17,10 +17,22 @@ func TestMain(t *testing.T) {
 
 	go sendDemo(t)
 
-	err := StartTCPTurnServer(seeds, processLogic)
+	err := StartTCPTurnServer(seeds, syncron, processLogic)
 	if err != nil {
 		t.Error(err)
 	}
+}
+
+func syncron() error {
+	log.Println("conns:", GetPeers())
+	for peer, _ := range GetPeers() {
+		err := Send(peer, 5, "aaa")
+		if err != nil {
+			return err
+		}
+	}
+
+	return nil
 }
 
 func processLogic(api int, data []byte, conn *net.TCPConn) error {
