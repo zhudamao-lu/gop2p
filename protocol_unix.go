@@ -326,6 +326,12 @@ func tcpHandle(command int, data []byte, conn *net.TCPConn, afterStart func() er
 		log.Println("节点连接成功")
 		peers[conn] = true
 
+		err := afterStart()
+		if err != nil {
+			log.Println(err)
+			return
+		}
+
 	//	sendDemo(conn, tt)
 
 		// 用于测试发送正式数据
@@ -407,6 +413,8 @@ func tcpHandle(command int, data []byte, conn *net.TCPConn, afterStart func() er
 		source:B distination:A
 	*/
 	case ACTION_CONNECTION_LOGIC:
+		log.Println("case 5:", data)
+
 		api, err := bytesToInt(data[:4])
 		if err != nil {
 			log.Println(err)
