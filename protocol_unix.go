@@ -21,8 +21,8 @@ import (
 const (
 	ACTION_CONNECTION_REQUEST = 0x00 // 接入请求
 	ACTION_CONNECTION_NOTICE = 0x01 // 新增接入通知，并开始穿透
-	ACTION_CONNECTION_TURN = 0x02 // 收到则穿透成功
-	ACTION_CONNECTION_TURNED = 0x03 // 服务器被告知已做过一次穿透，并通知另一客户端反向访问
+	ACTION_CONNECTION_TURN_OK = 0x02 // 收到则穿透成功
+	ACTION_CONNECTION_TURNING = 0x03 // 服务器被告知已做过一次穿透，并通知另一客户端反向访问
 	ACTION_CONNECTION_NOTICE2 = 0x04 // 第二次穿透访问
 	ACTION_CONNECTION_LOGIC = 0x05 // peer to peer 之间处理正式通信内容
 
@@ -38,7 +38,17 @@ var (
 	seedAddrs = make(map[*net.TCPAddr]bool, 1024) // 种子节点地址map
 	comingConns = make(map[*net.TCPConn]bool, 1024) // 自身看作穿透服时，新连接map
 	peers = make(map[*net.TCPConn]bool, 1024) // 自身看作客户端时，新连接map
+
+	EventsArrayFunc [5]func(args ...interface{}) error // 回调事件函数指针数组
 )
+
+/*
+type NetEvents interface {
+	OnRequest func(args ...interface{}) error
+	OnNotice func(args ...interface{}) error
+	On func(args ...interface{}) error
+}
+*/
 
 func GetPeers() map[*net.TCPConn]bool {
 	return peers
@@ -51,7 +61,8 @@ func GetSeedAddrs() map[*net.TCPAddr]bool {
 /*
 	连接种子节点
 */
-func connectSeed(lAddr *net.TCPAddr, seedAddrsStr []string, afterStart func() error, processLogic func(int, []byte, *net.TCPConn) error) error {
+
+func connectSeed(lAddr *net.TCPAddr, seedAddrsStr []string, processLogic func(int, []byte, *net.TCPConn) error) error {
 	for _, v := range seedAddrsStr {
 		addr, err := net.ResolveTCPAddr("tcp", v)
 		if err != nil {
@@ -79,7 +90,7 @@ func connectSeed(lAddr *net.TCPAddr, seedAddrsStr []string, afterStart func() er
 		data = append(data, body...)
 		log.Println(data)
 
-		go handleTCPConnection(connc.(*net.TCPConn), afterStart, processLogic)
+		go handleTCPConnection(connc.(*net.TCPConn), processLogic)
 		n, err := connc.Write(data)
 		if err != nil {
 			log.Println(err)
@@ -105,7 +116,7 @@ func connectSeed(lAddr *net.TCPAddr, seedAddrsStr []string, afterStart func() er
 	做出的相应动作. 第一个参数将会是对方传来数据的body中前4个字节.
 	该func 由用户实现, 并传入 StartTCPTurnServer.
 */
-func StartTCPTurnServer(seedAddrsStr []string, afterStart func() error, processLogic func(int, []byte, *net.TCPConn) error) error {
+func StartTCPTurnServer(seedAddrsStr []string, processLogic func(int, []byte, *net.TCPConn) error) error {
 	var listenConfig net.ListenConfig
 	listenConfig = net.ListenConfig{Control: controlSockReusePortUnix}
 
@@ -121,14 +132,16 @@ func StartTCPTurnServer(seedAddrsStr []string, afterStart func() error, processL
 	}
 	log.Println(lAddr)
 
-	connectSeed(lAddr, seedAddrsStr, afterStart, processLogic)
+//	connectSeed(lAddr, seedAddrsStr, eventsArrayFunc, processLogic)
+	connectSeed(lAddr, seedAddrsStr, processLogic)
 
-	listenAccept(ln, afterStart, processLogic)
+//	listenAccept(ln, eventsArrayFunc, processLogic)
+	listenAccept(ln, processLogic)
 
 	return nil
 }
 
-func handleTCPConnection(conn *net.TCPConn, afterStart func() error, processLogic func(int, []byte, *net.TCPConn) error) {
+func handleTCPConnection(conn *net.TCPConn, processLogic func(int, []byte, *net.TCPConn) error) {
 	defer conn.Close()
 
 	data := make([]byte, 0, 4096)
@@ -141,9 +154,7 @@ func handleTCPConnection(conn *net.TCPConn, afterStart func() error, processLogi
 			break
 		}
 
-	//	log.Println(n, buffer[:n])
 		data = append(data, buffer[:n]...)
-	//	log.Println(string(data))
 
 		for string(data[:PACKET_IDENTIFY_LEN]) == PACKET_IDENTIFY {
 			command, bodyLength, err = decodeData(data)
@@ -155,7 +166,7 @@ func handleTCPConnection(conn *net.TCPConn, afterStart func() error, processLogi
 			bodyEnd := PACKET_HEAD_LEN + bodyLength
 			if bodyEnd  <= len(data) {
 				body := data[PACKET_HEAD_LEN : bodyEnd]
-				tcpHandle(command, body, conn, afterStart, processLogic)
+				tcpHandle(command, body, conn, processLogic)
 				data = data[PACKET_HEAD_LEN + bodyLength :]
 				continue
 			}
@@ -163,11 +174,9 @@ func handleTCPConnection(conn *net.TCPConn, afterStart func() error, processLogi
 			break
 		}
 	}
-
-//	log.Println(data)
 }
 
-func listenAccept(ln net.Listener, afterStart func() error, processLogic func(int, []byte, *net.TCPConn) error) {
+func listenAccept(ln net.Listener, processLogic func(int, []byte, *net.TCPConn) error) {
 	defer ln.Close()
 	for {
 		conn, err := ln.Accept()
@@ -177,7 +186,7 @@ func listenAccept(ln net.Listener, afterStart func() error, processLogic func(in
 		}
 		log.Println(conn.RemoteAddr())
 
-		go handleTCPConnection(conn.(*net.TCPConn), afterStart, processLogic)
+		go handleTCPConnection(conn.(*net.TCPConn), processLogic)
 	}
 }
 
@@ -192,12 +201,11 @@ func decodeData(data []byte) (int, int, error) {
 		data = data[0:0]
 		return 0, 0, err
 	}
-//	log.Println(command, bodyLength)
 
 	return command, bodyLength, nil
 }
 
-func tcpHandle(command int, data []byte, conn *net.TCPConn, afterStart func() error, processLogic func(int, []byte, *net.TCPConn) error) {
+func tcpHandle(command int, data []byte, conn *net.TCPConn, processLogic func(int, []byte, *net.TCPConn) error) {
 	defer handlePanic("tcpHandle")
 
 	switch command {
@@ -241,6 +249,13 @@ func tcpHandle(command int, data []byte, conn *net.TCPConn, afterStart func() er
 		comingConns[conn] = true
 		log.Println(string(data))
 
+		if EventsArrayFunc[command] == nil { break }
+		err = EventsArrayFunc[command]()
+		if err != nil {
+			log.Println(err)
+			break
+		}
+
 	/*
 		收到穿透服务器发来的，新节点加入信息
 		对他进行访问用来打洞，并告知穿透服这一操作
@@ -267,11 +282,11 @@ func tcpHandle(command int, data []byte, conn *net.TCPConn, afterStart func() er
 			log.Println(err)
 		}
 
-		go handleTCPConnection(connc.(*net.TCPConn), afterStart, processLogic)
+	//	go handleTCPConnection(connc.(*net.TCPConn), eventsArrayFunc, processLogic)
 
 		body := []byte("turn...")
 		sendData := []byte(PACKET_IDENTIFY)
-		sendData = append(sendData, intToBytes(ACTION_CONNECTION_TURN)...)
+		sendData = append(sendData, intToBytes(ACTION_CONNECTION_TURN_OK)...)
 		sendData = append(sendData, intToBytes(len(body))...)
 		sendData = append(sendData, body...)
 		log.Println("sendData:", sendData)
@@ -281,13 +296,12 @@ func tcpHandle(command int, data []byte, conn *net.TCPConn, afterStart func() er
 			break
 		}
 		log.Println("n:", n)
-		peers[conn] = true
 
 		// 告知穿透服已打洞
 		body = []byte("turned...")
 		body = append(body, data...)
 		sendData = []byte(PACKET_IDENTIFY)
-		sendData = append(sendData, intToBytes(ACTION_CONNECTION_TURNED)...)
+		sendData = append(sendData, intToBytes(ACTION_CONNECTION_TURNING)...)
 		sendData = append(sendData, intToBytes(len(body))...)
 		sendData = append(sendData, body...)
 		n, err = conn.Write(sendData)
@@ -296,6 +310,13 @@ func tcpHandle(command int, data []byte, conn *net.TCPConn, afterStart func() er
 			break
 		}
 		log.Println("n:", n)
+
+		if EventsArrayFunc[command] == nil { break }
+		err = EventsArrayFunc[command]()
+		if err != nil {
+			log.Println(err)
+			break
+		}
 
 	/*
 		本次消息由于网络环境可能被忽略
@@ -313,7 +334,7 @@ func tcpHandle(command int, data []byte, conn *net.TCPConn, afterStart func() er
 		其中有一次未被忽略的将会收到"hello,brother"消息
 		表示穿透成功，可以在此case中继续后续回调执行上层逻辑
 	*/
-	case ACTION_CONNECTION_TURN:
+	case ACTION_CONNECTION_TURN_OK:
 		log.Println("case 2:", data)
 		log.Println(string(data[:7]))
 		for k, _ := range comingConns {
@@ -323,26 +344,24 @@ func tcpHandle(command int, data []byte, conn *net.TCPConn, afterStart func() er
 		}
 
 		log.Println("节点连接成功")
-
-		log.Println(conn.RemoteAddr(), "yyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyy")
 		peers[conn] = true
 
-		err := afterStart()
+	//	go handleTCPConnection(connc.(*net.TCPConn), eventsArrayFunc, processLogic)
+
+		if EventsArrayFunc[command] == nil { break }
+		err := EventsArrayFunc[command]()
 		if err != nil {
 			log.Println(err)
-			return
+			break
 		}
 
-	//	sendDemo(conn, tt)
-
-		// 用于测试发送正式数据
 
 	/*
 		穿透服务收到打洞回馈信息
 		连接关系:
 		source:A distination:S data:B
 	*/
-	case ACTION_CONNECTION_TURNED:
+	case ACTION_CONNECTION_TURNING:
 		log.Println("case 3:", data)
 		log.Println(string(data[:9]))
 
@@ -379,6 +398,13 @@ func tcpHandle(command int, data []byte, conn *net.TCPConn, afterStart func() er
 		}
 		log.Println("n:", n)
 
+		if EventsArrayFunc[command] == nil { break }
+		err = EventsArrayFunc[command]()
+		if err != nil {
+			log.Println(err)
+			break
+		}
+
 	/*
 		客户端收到穿透服告知其他客户端已向自己打洞
 		开始向其他客户端发送消息
@@ -396,16 +422,23 @@ func tcpHandle(command int, data []byte, conn *net.TCPConn, afterStart func() er
 		// 封装数据 发送 "turn..."
 		body := []byte("turn...")
 		sendData := []byte(PACKET_IDENTIFY)
-		sendData = append(sendData, intToBytes(ACTION_CONNECTION_TURN)...)
+		sendData = append(sendData, intToBytes(ACTION_CONNECTION_TURN_OK)...)
 		sendData = append(sendData, intToBytes(len(body))...)
 		sendData = append(sendData, body...)
+
 		n, err := conn.Write(sendData)
 		if err != nil {
 			log.Println(err)
 			break
 		}
 		log.Println("n:", n)
-		peers[conn] = true
+
+		if EventsArrayFunc[command] == nil { break }
+		err = EventsArrayFunc[command]()
+		if err != nil {
+			log.Println(err)
+			break
+		}
 
 	/*
 		点对点正式通信，此时穿透服已不需要

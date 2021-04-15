@@ -3,7 +3,7 @@ package gop2p
 import (
 	"testing"
 	"net"
-	"time"
+//	"time"
 	"log"
 )
 
@@ -12,19 +12,48 @@ func TestMain(t *testing.T) {
 	tt = t
 
 	seeds := []string {
-	//	"121.41.85.45:39279",
+		"121.41.85.45:45647",
 	}
 
-	go sendDemo(t)
+//	go sendDemo(t)
 
-	err := StartTCPTurnServer(seeds, syncron, processLogic)
+	EventsArrayFunc[ACTION_CONNECTION_REQUEST] = nil /* func(args ...interface{}) error {
+		log.Println("on request")
+		return nil
+	} */
+
+	EventsArrayFunc[ACTION_CONNECTION_NOTICE] = func(args ...interface{}) error {
+		log.Println("on notice")
+		return nil
+	}
+
+	EventsArrayFunc[ACTION_CONNECTION_TURN_OK] = func(args ...interface{}) error {
+		log.Println("on OK")
+		return nil
+	}
+
+	EventsArrayFunc[ACTION_CONNECTION_TURNING] = func(args ...interface{}) error {
+		log.Println("on turning")
+		return nil
+	}
+
+	EventsArrayFunc[ACTION_CONNECTION_NOTICE2] = func(args ...interface{}) error {
+		log.Println("on notice2")
+		for k, v := range GetPeers() {
+			log.Println("peer:", k.RemoteAddr(), v, "iiiiiiiiii")
+		}
+		return nil
+	}
+
+	err := StartTCPTurnServer(seeds, processLogic)
+//	err := StartTCPTurnServer(seeds, eventsArrayFunc, processLogic)
 	if err != nil {
 		t.Error(err)
 	}
 }
 
+/*
 func syncron() error {
-	log.Println("conns:", GetPeers())
 	for peer, _ := range GetPeers() {
 		err := Send(peer, 5, []byte("aaa"))
 		if err != nil {
@@ -34,6 +63,7 @@ func syncron() error {
 
 	return nil
 }
+*/
 
 func processLogic(api int, data []byte, conn *net.TCPConn) error {
 	switch api {
@@ -46,6 +76,7 @@ func processLogic(api int, data []byte, conn *net.TCPConn) error {
 	return nil
 }
 
+	/*
 func sendDemo(t *testing.T) {
 	time.Sleep(time.Second * 5)
 
@@ -79,3 +110,4 @@ func sendDemo(t *testing.T) {
 		log.Println("n:", n)
 	}
 }
+	*/
