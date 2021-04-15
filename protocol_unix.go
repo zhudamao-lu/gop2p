@@ -323,6 +323,8 @@ func tcpHandle(command int, data []byte, conn *net.TCPConn, afterStart func() er
 		}
 
 		log.Println("节点连接成功")
+
+		log.Println(conn.RemoteAddr(), "yyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyy")
 		peers[conn] = true
 
 		err := afterStart()
