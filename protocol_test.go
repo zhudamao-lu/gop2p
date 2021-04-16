@@ -4,55 +4,86 @@ import (
 	"testing"
 	"net"
 //	"time"
+	"fmt"
 	"log"
 )
 
-var tt *testing.T
-func TestMain(t *testing.T) {
-	tt = t
+/*
+type netEvent struct {
+	args [5]*interface{}
+}
 
-	seeds := []string {
-		"121.41.85.45:45647",
-	}
+func (e *netEvent) OnRequest (args ...interface{}) error {
+	e.args[
+}
 
-//	go sendDemo(t)
+func (e *netEvent) OnNotice (args ...interface{}) error {
+}
 
-	EventsArrayFunc[ACTION_CONNECTION_REQUEST] = nil /* func(args ...interface{}) error {
-		log.Println("on request")
-		return nil
-	} */
+func (e *netEvent) OnOK (args ...interface{}) error {
+}
 
-	EventsArrayFunc[ACTION_CONNECTION_NOTICE] = func(args ...interface{}) error {
-		log.Println("on notice")
-		return nil
-	}
+func (e *netEvent) OnTurning (args ...interface{}) error {
+}
 
-	EventsArrayFunc[ACTION_CONNECTION_TURN_OK] = func(args ...interface{}) error {
-		log.Println("on OK")
-		return nil
-	}
+func (e *netEvent) OnNotice2 (args ...interface{}) error {
+}
+*/
 
-	EventsArrayFunc[ACTION_CONNECTION_TURNING] = func(args ...interface{}) error {
-		log.Println("on turning")
-		return nil
-	}
+var event *Event_T
 
-	EventsArrayFunc[ACTION_CONNECTION_NOTICE2] = func(args ...interface{}) error {
-		log.Println("on notice2")
-		for k, v := range GetPeers() {
-			log.Println("peer:", k.RemoteAddr(), v, "iiiiiiiiii")
+func init() {
+	event = &Event_T{}
+	event.Args[0] = [2]string{"on request", "hi hi hi"}
+	event.Args[1] = "on Notice"
+	event.Args[2] = [2]interface{}{"on OK", syncron}
+	event.Args[3] = "on Turning"
+	event.Args[4] = "on Notice 2"
+
+	event.OnRequest = func(command int) error {
+		for _, v := range event.Args[command].([2]string) {
+			fmt.Println(v)
 		}
 		return nil
 	}
 
-	err := StartTCPTurnServer(seeds, processLogic)
+	event.OnNotice = func(command int) error {
+		fmt.Println(event.Args[command])
+		return nil
+	}
+
+	event.OnOK = func(command int) error {
+		fmt.Println(event.Args[command].([2]interface{})[0])
+		event.Args[command].([2]interface{})[1].(func() error)()
+		return nil
+	}
+
+	event.OnTurning = func(command int) error {
+		fmt.Println(event.Args[command])
+		return nil
+	}
+
+	event.OnNotice2 = func(command int) error {
+		fmt.Println(event.Args[command])
+		return nil
+	}
+}
+
+func TestMain(t *testing.T) {
+
+	seeds := []string {
+		"121.41.85.45:34009",
+	}
+
+//	go sendDemo(t)
+
+	err := StartTCPTurnServer(seeds, event, processLogic)
 //	err := StartTCPTurnServer(seeds, eventsArrayFunc, processLogic)
 	if err != nil {
 		t.Error(err)
 	}
 }
 
-/*
 func syncron() error {
 	for peer, _ := range GetPeers() {
 		err := Send(peer, 5, []byte("aaa"))
@@ -63,7 +94,6 @@ func syncron() error {
 
 	return nil
 }
-*/
 
 func processLogic(api int, data []byte, conn *net.TCPConn) error {
 	switch api {

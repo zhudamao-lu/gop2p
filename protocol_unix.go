@@ -39,16 +39,17 @@ var (
 	comingConns = make(map[*net.TCPConn]bool, 1024) // 自身看作穿透服时，新连接map
 	peers = make(map[*net.TCPConn]bool, 1024) // 自身看作客户端时，新连接map
 
-	EventsArrayFunc [5]func(args ...interface{}) error // 回调事件函数指针数组
+//	EventsArrayFunc [5]func(args ...interface{}) error // 回调事件函数指针数组
 )
 
-/*
-type NetEvents interface {
-	OnRequest func(args ...interface{}) error
-	OnNotice func(args ...interface{}) error
-	On func(args ...interface{}) error
+type Event_T struct {
+	Args [5]interface{}
+	OnRequest func(command int) error
+	OnNotice func(command int) error
+	OnOK func(command int) error
+	OnTurning func(command int) error
+	OnNotice2 func(command int) error
 }
-*/
 
 func GetPeers() map[*net.TCPConn]bool {
 	return peers
@@ -62,7 +63,8 @@ func GetSeedAddrs() map[*net.TCPAddr]bool {
 	连接种子节点
 */
 
-func connectSeed(lAddr *net.TCPAddr, seedAddrsStr []string, processLogic func(int, []byte, *net.TCPConn) error) error {
+// func connectSeed(lAddr *net.TCPAddr, seedAddrsStr []string, processLogic func(int, []byte, *net.TCPConn) error) error {
+func connectSeed(lAddr *net.TCPAddr, seedAddrsStr []string, event *Event_T, processLogic func(int, []byte, *net.TCPConn) error) error {
 	for _, v := range seedAddrsStr {
 		addr, err := net.ResolveTCPAddr("tcp", v)
 		if err != nil {
@@ -90,7 +92,7 @@ func connectSeed(lAddr *net.TCPAddr, seedAddrsStr []string, processLogic func(in
 		data = append(data, body...)
 		log.Println(data)
 
-		go handleTCPConnection(connc.(*net.TCPConn), processLogic)
+		go handleTCPConnection(connc.(*net.TCPConn), event, processLogic)
 		n, err := connc.Write(data)
 		if err != nil {
 			log.Println(err)
@@ -116,7 +118,7 @@ func connectSeed(lAddr *net.TCPAddr, seedAddrsStr []string, processLogic func(in
 	做出的相应动作. 第一个参数将会是对方传来数据的body中前4个字节.
 	该func 由用户实现, 并传入 StartTCPTurnServer.
 */
-func StartTCPTurnServer(seedAddrsStr []string, processLogic func(int, []byte, *net.TCPConn) error) error {
+func StartTCPTurnServer(seedAddrsStr []string, event *Event_T, processLogic func(int, []byte, *net.TCPConn) error) error {
 	var listenConfig net.ListenConfig
 	listenConfig = net.ListenConfig{Control: controlSockReusePortUnix}
 
@@ -133,15 +135,15 @@ func StartTCPTurnServer(seedAddrsStr []string, processLogic func(int, []byte, *n
 	log.Println(lAddr)
 
 //	connectSeed(lAddr, seedAddrsStr, eventsArrayFunc, processLogic)
-	connectSeed(lAddr, seedAddrsStr, processLogic)
+	connectSeed(lAddr, seedAddrsStr, event, processLogic)
 
 //	listenAccept(ln, eventsArrayFunc, processLogic)
-	listenAccept(ln, processLogic)
+	listenAccept(ln, event, processLogic)
 
 	return nil
 }
 
-func handleTCPConnection(conn *net.TCPConn, processLogic func(int, []byte, *net.TCPConn) error) {
+func handleTCPConnection(conn *net.TCPConn, event *Event_T, processLogic func(int, []byte, *net.TCPConn) error) {
 	defer conn.Close()
 
 	data := make([]byte, 0, 4096)
@@ -166,7 +168,7 @@ func handleTCPConnection(conn *net.TCPConn, processLogic func(int, []byte, *net.
 			bodyEnd := PACKET_HEAD_LEN + bodyLength
 			if bodyEnd  <= len(data) {
 				body := data[PACKET_HEAD_LEN : bodyEnd]
-				tcpHandle(command, body, conn, processLogic)
+				tcpHandle(command, body, conn, event, processLogic)
 				data = data[PACKET_HEAD_LEN + bodyLength :]
 				continue
 			}
@@ -176,7 +178,7 @@ func handleTCPConnection(conn *net.TCPConn, processLogic func(int, []byte, *net.
 	}
 }
 
-func listenAccept(ln net.Listener, processLogic func(int, []byte, *net.TCPConn) error) {
+func listenAccept(ln net.Listener, event *Event_T, processLogic func(int, []byte, *net.TCPConn) error) {
 	defer ln.Close()
 	for {
 		conn, err := ln.Accept()
@@ -186,7 +188,7 @@ func listenAccept(ln net.Listener, processLogic func(int, []byte, *net.TCPConn) 
 		}
 		log.Println(conn.RemoteAddr())
 
-		go handleTCPConnection(conn.(*net.TCPConn), processLogic)
+		go handleTCPConnection(conn.(*net.TCPConn), event, processLogic)
 	}
 }
 
@@ -205,7 +207,7 @@ func decodeData(data []byte) (int, int, error) {
 	return command, bodyLength, nil
 }
 
-func tcpHandle(command int, data []byte, conn *net.TCPConn, processLogic func(int, []byte, *net.TCPConn) error) {
+func tcpHandle(command int, data []byte, conn *net.TCPConn, event *Event_T, processLogic func(int, []byte, *net.TCPConn) error) {
 	defer handlePanic("tcpHandle")
 
 	switch command {
@@ -249,12 +251,22 @@ func tcpHandle(command int, data []byte, conn *net.TCPConn, processLogic func(in
 		comingConns[conn] = true
 		log.Println(string(data))
 
+		err = event.OnRequest(command)
+		if err != nil {
+			log.Println(err)
+			break
+		}
+
+		/*
 		if EventsArrayFunc[command] == nil { break }
 		err = EventsArrayFunc[command]()
 		if err != nil {
 			log.Println(err)
 			break
 		}
+		*/
+
+
 
 	/*
 		收到穿透服务器发来的，新节点加入信息
@@ -282,7 +294,7 @@ func tcpHandle(command int, data []byte, conn *net.TCPConn, processLogic func(in
 			log.Println(err)
 		}
 
-	//	go handleTCPConnection(connc.(*net.TCPConn), eventsArrayFunc, processLogic)
+		go handleTCPConnection(connc.(*net.TCPConn), event, processLogic)
 
 		body := []byte("turn...")
 		sendData := []byte(PACKET_IDENTIFY)
@@ -311,12 +323,20 @@ func tcpHandle(command int, data []byte, conn *net.TCPConn, processLogic func(in
 		}
 		log.Println("n:", n)
 
+		err = event.OnNotice(command)
+		if err != nil {
+			log.Println(err)
+			break
+		}
+
+		/*
 		if EventsArrayFunc[command] == nil { break }
 		err = EventsArrayFunc[command]()
 		if err != nil {
 			log.Println(err)
 			break
 		}
+		*/
 
 	/*
 		本次消息由于网络环境可能被忽略
@@ -346,14 +366,22 @@ func tcpHandle(command int, data []byte, conn *net.TCPConn, processLogic func(in
 		log.Println("节点连接成功")
 		peers[conn] = true
 
-	//	go handleTCPConnection(connc.(*net.TCPConn), eventsArrayFunc, processLogic)
+	//	go handleTCPConnection(conn, event, processLogic)
 
+		err := event.OnOK(command)
+		if err != nil {
+			log.Println(err)
+			break
+		}
+
+	/*
 		if EventsArrayFunc[command] == nil { break }
 		err := EventsArrayFunc[command]()
 		if err != nil {
 			log.Println(err)
 			break
 		}
+	*/
 
 
 	/*
@@ -376,10 +404,10 @@ func tcpHandle(command int, data []byte, conn *net.TCPConn, processLogic func(in
 			break
 		}
 
-		var connS *net.TCPConn
+		var connStB *net.TCPConn
 		for k, _ := range comingConns {
 			if k.RemoteAddr().String() == rAddrC.String() {
-				connS = k
+				connStB = k
 				break
 			}
 		}
@@ -391,19 +419,27 @@ func tcpHandle(command int, data []byte, conn *net.TCPConn, processLogic func(in
 		sendData = append(sendData, intToBytes(ACTION_CONNECTION_NOTICE2)...)
 		sendData = append(sendData, intToBytes(len(body))...)
 		sendData = append(sendData, body...)
-		n, err := connS.Write(sendData)
+		n, err := connStB.Write(sendData)
 		if err != nil {
 			log.Println(err)
 			break
 		}
 		log.Println("n:", n)
 
+		err = event.OnTurning(command)
+		if err != nil {
+			log.Println(err)
+			break
+		}
+
+		/*
 		if EventsArrayFunc[command] == nil { break }
 		err = EventsArrayFunc[command]()
 		if err != nil {
 			log.Println(err)
 			break
 		}
+		*/
 
 	/*
 		客户端收到穿透服告知其他客户端已向自己打洞
@@ -426,19 +462,52 @@ func tcpHandle(command int, data []byte, conn *net.TCPConn, processLogic func(in
 		sendData = append(sendData, intToBytes(len(body))...)
 		sendData = append(sendData, body...)
 
-		n, err := conn.Write(sendData)
+	//	var tf bool
+		for k, _ := range peers {
+			if k.RemoteAddr().Network() == rAddrC.Network() && k.RemoteAddr().String() == rAddrC.String() {
+				log.Println("B has A:", k.LocalAddr(), k.RemoteAddr())
+				n, err := k.Write(sendData)
+				if err != nil {
+					log.Println(err)
+					break
+				}
+				log.Println("n:", n)
+
+			//	tf = true
+				break
+			}
+		}
+
+		/*
+		if tf {
+			lAddr, err := net.ResolveTCPAddr(conn.LocalAddr().Network(), conn.LocalAddr().String())
+			if err != nil {
+				log.Println(err)
+			}
+
+			d := net.Dialer {Control: controlSockReusePortUnix, LocalAddr: lAddr}
+			connc, err := d.Dial(rAddrC.Network(), rAddrC.String())
+			if err != nil {
+				log.Println(err)
+				break
+			}
+		}
+		*/
+
+		err := event.OnNotice2(command)
 		if err != nil {
 			log.Println(err)
 			break
 		}
-		log.Println("n:", n)
 
+		/*
 		if EventsArrayFunc[command] == nil { break }
 		err = EventsArrayFunc[command]()
 		if err != nil {
 			log.Println(err)
 			break
 		}
+		*/
 
 	/*
 		点对点正式通信，此时穿透服已不需要
