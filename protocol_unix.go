@@ -208,7 +208,7 @@ func decodeData(data []byte) (int, int, error) {
 }
 
 func tcpHandle(command int, data []byte, conn *net.TCPConn, event *Event_T, processLogic func(int, []byte, *net.TCPConn) error) {
-	defer handlePanic("tcpHandle")
+//	defer handlePanic("tcpHandle")
 
 	switch command {
 	/*
@@ -597,9 +597,11 @@ func send(conn *net.TCPConn, data []byte) error {
 	return nil
 }
 
+/*
 func handlePanic(funcname string) {
 	err := recover()
 	if err != nil {
 		log.Println("in", funcname, "panic:", err)
 	}
 }
+*/
