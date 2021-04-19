@@ -327,7 +327,7 @@ func tcpHandle(command int, data []byte, conn *net.TCPConn, event *Event_T, proc
 		}
 		log.Println("n:", n)
 
-		err = event.OnNotice(command)
+		err = event.OnNotice(command, conn)
 		if err != nil {
 			log.Println(err)
 			break
@@ -372,7 +372,7 @@ func tcpHandle(command int, data []byte, conn *net.TCPConn, event *Event_T, proc
 
 	//	go handleTCPConnection(conn, event, processLogic)
 
-		err := event.OnOK(command)
+		err := event.OnOK(command, conn)
 		if err != nil {
 			log.Println(err)
 			break
@@ -430,7 +430,7 @@ func tcpHandle(command int, data []byte, conn *net.TCPConn, event *Event_T, proc
 		}
 		log.Println("n:", n)
 
-		err = event.OnTurning(command)
+		err = event.OnTurning(command, conn)
 		if err != nil {
 			log.Println(err)
 			break
@@ -498,7 +498,7 @@ func tcpHandle(command int, data []byte, conn *net.TCPConn, event *Event_T, proc
 		}
 		*/
 
-		err := event.OnNotice2(command)
+		err := event.OnNotice2(command, conn)
 		if err != nil {
 			log.Println(err)
 			break
