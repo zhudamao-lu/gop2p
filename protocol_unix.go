@@ -44,15 +44,19 @@ var (
 
 type Event_T struct {
 	Args [5]interface{}
-	OnRequest func(command int) error
-	OnNotice func(command int) error
-	OnOK func(command int) error
-	OnTurning func(command int) error
-	OnNotice2 func(command int) error
+	OnRequest func(command int, innerArgs ...interface{}) error
+	OnNotice func(command int, innerArgs ...interface{}) error
+	OnOK func(command int, innerArgs ...interface{}) error
+	OnTurning func(command int, innerArgs ...interface{}) error
+	OnNotice2 func(command int, innerArgs ...interface{}) error
 }
 
 func GetPeers() map[*net.TCPConn]bool {
 	return peers
+}
+
+func AddPeer(conn *net.TCPConn) {
+	peers[conn] = true
 }
 
 func GetSeedAddrs() map[*net.TCPAddr]bool {
@@ -251,7 +255,7 @@ func tcpHandle(command int, data []byte, conn *net.TCPConn, event *Event_T, proc
 		comingConns[conn] = true
 		log.Println(string(data))
 
-		err = event.OnRequest(command)
+		err = event.OnRequest(command, conn)
 		if err != nil {
 			log.Println(err)
 			break

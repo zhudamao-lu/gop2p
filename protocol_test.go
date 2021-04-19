@@ -40,30 +40,30 @@ func init() {
 	event.Args[3] = "on Turning"
 	event.Args[4] = "on Notice 2"
 
-	event.OnRequest = func(command int) error {
+	event.OnRequest = func(command int, innerArgs ...interface{}) error {
 		for _, v := range event.Args[command].([2]string) {
 			fmt.Println(v)
 		}
 		return nil
 	}
 
-	event.OnNotice = func(command int) error {
+	event.OnNotice = func(command int, innerArgs ...interface{}) error {
 		fmt.Println(event.Args[command])
 		return nil
 	}
 
-	event.OnOK = func(command int) error {
+	event.OnOK = func(command int, innerArgs ...interface{}) error {
 		fmt.Println(event.Args[command].([2]interface{})[0])
 		event.Args[command].([2]interface{})[1].(func() error)()
 		return nil
 	}
 
-	event.OnTurning = func(command int) error {
+	event.OnTurning = func(command int, innerArgs ...interface{}) error {
 		fmt.Println(event.Args[command])
 		return nil
 	}
 
-	event.OnNotice2 = func(command int) error {
+	event.OnNotice2 = func(command int, innerArgs ...interface{}) error {
 		fmt.Println(event.Args[command])
 		return nil
 	}
