@@ -94,15 +94,13 @@ func connectSeed(lAddr *net.TCPAddr, seedAddrsStr []string, event *Event_T, proc
 		data = append(data, intToBytes(ACTION_CONNECTION_REQUEST)...)
 		data = append(data, intToBytes(len(body))...)
 		data = append(data, body...)
-		log.Println(data)
 
 		go handleTCPConnection(connc.(*net.TCPConn), event, processLogic)
-		n, err := connc.Write(data)
+		_, err = connc.Write(data)
 		if err != nil {
 			log.Println(err)
 			continue
 		}
-		log.Println(n)
 	}
 
 	return nil
@@ -221,7 +219,7 @@ func tcpHandle(command int, data []byte, conn *net.TCPConn, event *Event_T, proc
 		source:B distination:S
 	*/
 	case ACTION_CONNECTION_REQUEST:
-		log.Println("case 0:", data)
+		log.Println("case 0:")
 		for k, v := range comingConns {
 			log.Println(k.LocalAddr(), k.RemoteAddr(), v)
 		}
