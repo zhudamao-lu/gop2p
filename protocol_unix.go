@@ -15,6 +15,7 @@ package gop2p
 import (
 	"context"
 	"net"
+	"fmt"
 	"log"
 )
 
@@ -219,7 +220,7 @@ func tcpHandle(command int, data []byte, conn *net.TCPConn, event *Event_T, proc
 		source:B distination:S
 	*/
 	case ACTION_CONNECTION_REQUEST:
-		log.Println("case 0:")
+		fmt.Println("case 0:")
 		for k, v := range comingConns {
 			log.Println(k.LocalAddr(), k.RemoteAddr(), v)
 		}
@@ -277,7 +278,7 @@ func tcpHandle(command int, data []byte, conn *net.TCPConn, event *Event_T, proc
 		source:S distination:A data:B
 	*/
 	case ACTION_CONNECTION_NOTICE:
-		log.Println("case 1:", data)
+		fmt.Println("case 1:")
 
 		// Decode 对方客户端 addr
 		ip := net.IP(data[:16])
@@ -357,15 +358,15 @@ func tcpHandle(command int, data []byte, conn *net.TCPConn, event *Event_T, proc
 		表示穿透成功，可以在此case中继续后续回调执行上层逻辑
 	*/
 	case ACTION_CONNECTION_TURN_OK:
-		log.Println("case 2:", data)
-		log.Println(string(data[:7]))
+		fmt.Println("case 2:")
+		fmt.Println(string(data[:7]))
 		for k, _ := range comingConns {
 			if k.RemoteAddr() == conn.RemoteAddr() {
 				return
 			}
 		}
 
-		log.Println("节点连接成功")
+		fmt.Println("节点连接成功")
 		peers[conn] = true
 
 	//	go handleTCPConnection(conn, event, processLogic)
@@ -392,13 +393,13 @@ func tcpHandle(command int, data []byte, conn *net.TCPConn, event *Event_T, proc
 		source:A distination:S data:B
 	*/
 	case ACTION_CONNECTION_TURNING:
-		log.Println("case 3:", data)
-		log.Println(string(data[:9]))
+		fmt.Println("case 3:")
+		fmt.Println(string(data[:9]))
 
 		// Decode 对方客户端 addr
 		ip := net.IP(data[9:25])
 		rAddrC := &net.TCPAddr{ip, int(data[25]) << 8 | int(data[26]), ""}
-		log.Println(rAddrC)
+		fmt.Println(rAddrC)
 
 		rAddr, err := net.ResolveTCPAddr(conn.LocalAddr().Network(), conn.RemoteAddr().String())
 		if err != nil {
@@ -426,7 +427,7 @@ func tcpHandle(command int, data []byte, conn *net.TCPConn, event *Event_T, proc
 			log.Println(err)
 			break
 		}
-		log.Println("n:", n)
+		fmt.Println("n:", n)
 
 		err = event.OnTurning(command, conn)
 		if err != nil {
@@ -450,12 +451,12 @@ func tcpHandle(command int, data []byte, conn *net.TCPConn, event *Event_T, proc
 		source:S distination:B data:A
 	*/
 	case ACTION_CONNECTION_NOTICE2:
-		log.Println("case 4:", data)
+		fmt.Println("case 4:")
 
 		// Decode 对方客户端 addr
 		ip := net.IP(data[:16])
 		rAddrC := &net.TCPAddr{ip, int(data[16]) << 8 | int(data[17]), ""}
-		log.Println(rAddrC)
+		fmt.Println(rAddrC)
 
 		// 封装数据 发送 "turn..."
 		body := []byte("turn...")
@@ -467,13 +468,13 @@ func tcpHandle(command int, data []byte, conn *net.TCPConn, event *Event_T, proc
 	//	var tf bool
 		for k, _ := range peers {
 			if k.RemoteAddr().Network() == rAddrC.Network() && k.RemoteAddr().String() == rAddrC.String() {
-				log.Println("B has A:", k.LocalAddr(), k.RemoteAddr())
+				fmt.Println("B has A:", k.LocalAddr(), k.RemoteAddr())
 				n, err := k.Write(sendData)
 				if err != nil {
 					log.Println(err)
 					break
 				}
-				log.Println("n:", n)
+				fmt.Println("n:", n)
 
 			//	tf = true
 				break
@@ -519,7 +520,7 @@ func tcpHandle(command int, data []byte, conn *net.TCPConn, event *Event_T, proc
 		source:B distination:A
 	*/
 	case ACTION_CONNECTION_LOGIC:
-		log.Println("case 5:", data)
+		fmt.Println("case 5:")
 
 		api, err := bytesToInt(data[:4])
 		if err != nil {
@@ -527,8 +528,7 @@ func tcpHandle(command int, data []byte, conn *net.TCPConn, event *Event_T, proc
 			break
 		}
 
-		log.Println("api:", api)
-		log.Println(data[:4], "--", data[4:])
+	//	log.Println(data[:4], "--", data[4:])
 		err = processLogic(api, data[4:], conn)
 		if err != nil {
 			log.Println(err)
@@ -539,7 +539,7 @@ func tcpHandle(command int, data []byte, conn *net.TCPConn, event *Event_T, proc
 		用于测试TCP
 	*/
 	case 0xffffffff:
-		log.Println(string(data))
+		fmt.Println(string(data))
 	}
 }
 
