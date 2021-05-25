@@ -23,7 +23,7 @@ func init() {
 	event.Args[3] = "on Turning"
 	event.Args[4] = "on Notice 2"
 
-	event.OnRequest = func(command int, innerArgs ...interface{}) error {
+	event.OnRequest = func(command uint8, innerArgs ...interface{}) error {
 		for _, v := range event.Args[command].([2]string) {
 			fmt.Println(v)
 		}
@@ -32,7 +32,7 @@ func init() {
 		return nil
 	}
 
-	event.OnNotice = func(command int, innerArgs ...interface{}) error {
+	event.OnNotice = func(command uint8, innerArgs ...interface{}) error {
 		fmt.Println(event.Args[command])
 		AddPeer(innerArgs[0].(*net.TCPConn)) // 如果穿透服也是一个节点，则可以执行此
 
@@ -42,19 +42,19 @@ func init() {
 		return nil
 	}
 
-	event.OnOK = func(command int, innerArgs ...interface{}) error {
+	event.OnOK = func(command uint8, innerArgs ...interface{}) error {
 		fmt.Println(event.Args[command].([2]interface{})[0])
 		fmt.Println("peers:", GetPeers())
 	//	event.Args[command].([2]interface{})[1].(func() error)()
 		return nil
 	}
 
-	event.OnTurning = func(command int, innerArgs ...interface{}) error {
+	event.OnTurning = func(command uint8, innerArgs ...interface{}) error {
 		fmt.Println(event.Args[command])
 		return nil
 	}
 
-	event.OnNotice2 = func(command int, innerArgs ...interface{}) error {
+	event.OnNotice2 = func(command uint8, innerArgs ...interface{}) error {
 		fmt.Println(event.Args[command])
 		AddPeer(innerArgs[0].(*net.TCPConn)) // 如果穿透服也是一个节点，则可以执行此
 
