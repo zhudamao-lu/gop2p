@@ -66,7 +66,7 @@ func init() {
 
 func TestMain(t *testing.T) {
 	seeds := []string {
-		"121.41.85.45:39991",
+		"47.98.204.151:45129",
 	}
 
 	go func() {

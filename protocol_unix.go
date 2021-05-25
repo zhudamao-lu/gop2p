@@ -43,31 +43,36 @@ const (
 	PACKET_TIME_END_LEN = 0x1d // 包头中开始到时间结束长度 12 + 1 + 8 + 8
 	PACKET_NONCE_LEN= 0x4 // 随机数长度 4
 	PACKET_NONCE_END_LEN= 0x21 // 包头中开始到随机数结束长度 12 + 1 + 8 + 8 + 4
-	PACKET_HASH_LEN= 0x20 // 包头hash长度
-	PACKET_HEAD_LEN = 0x41 // 包头固定长度 12 + 1 + 8 + 8 + 4 + 32
+	PACKET_HASH_LEN= 0x40 // 包头hash长度
+	PACKET_HEAD_LEN = 0x61 // 包头固定长度 12 + 1 + 8 + 8 + 4 + 32
 )
 
 type hashNonce_T struct {
 	hash []byte
 	nonce []byte
 	timestamp int64
+	prev *hashNonce_T
 	next *hashNonce_T
 }
 
-func (hn *hashNonce_T) countDown(hnPrev *hashNonce_T) {
+func (hn *hashNonce_T) countDown() {
 	time.Sleep(time.Second * 300)
-	hashNonceListMutex.Lock()
-	hnPrev.next = hn.next
-	delete(hashNonceList, hn)
-	hashNonceListMutex.Unlock()
+	hashNonceMutex.Lock()
+	hn.prev = hn.next
+	if hn == hashNonceFirst {
+		hashNonceFirst = hashNonceFirst.next
+	}
+	hn = nil
+	hashNonceMutex.Unlock()
 }
 
 var (
 	seedAddrs = make(map[*net.TCPAddr]bool, 1024) // 种子节点地址map
 	comingConns = make(map[*net.TCPConn]bool, 1024) // 自身看作穿透服时，新连接map
 	peers = make(map[*net.TCPConn]bool, 1024) // 自身看作客户端时，新连接map
-	hashNonceList = make([]*hashNonce_T, 0, 1024)
-	hashNonceListMutex = &sync.Mutex{}
+	hashNonceFirst *hashNonce_T
+	hashNonceCurrent *hashNonce_T
+	hashNonceMutex = &sync.Mutex{}
 
 //	EventsArrayFunc [5]func(args ...interface{}) error // 回调事件函数指针数组
 )
@@ -205,41 +210,53 @@ func handleTCPConnection(conn *net.TCPConn, event *Event_T, processLogic func(in
 
 			if command == ACTION_CONNECTION_LOGIC {
 				sum := sha256.Sum256(data[PACKET_IDENTIFY_LEN : PACKET_NONCE_END_LEN])
+				fmt.Println(hex.EncodeToString(sum[:]))
+				fmt.Println(hex.EncodeToString(hashNonce.hash))
 				if hex.EncodeToString(sum[:]) != hex.EncodeToString(hashNonce.hash) {
 					fmt.Println("hash invalid")
 					data = data[:]
 					break
 				}
 
+				hashNonceMutex.Lock()
 				if hashNonce.timestamp + 300000000000 < time.Now().UnixNano() {
 					fmt.Println("expired packet")
 					data = data[:]
 					break
 				}
 
-				var b bool
-				for _, hn := range hashNonceList {
-					if hex.EncodeToString(hashNonce.hash) == hex.EncodeToString(hn.hash) && hex.EncodeToString(hashNonce.nonce) == hex.EncodeToString(hn.nonce) {
-						fmt.Println("duplucated hash")
-						data = data[:]
-						break
-
-					}
-
-					b = true
+				current := hashNonceFirst
+				if hex.EncodeToString(current.hash) == hex.EncodeToString(hashNonce.hash) && hex.EncodeToString(current.nonce) == hex.EncodeToString(hashNonce.nonce) {
+					log.Println("duplucated message")
+					data = data[:]
+					break
 				}
-
-				if !b {
+				current = current.next
+				var b bool
+				for current != hashNonceFirst {
+					if hex.EncodeToString(current.hash) == hex.EncodeToString(hashNonce.hash) && hex.EncodeToString(current.nonce) == hex.EncodeToString(hashNonce.nonce) {
+						b = true
+						break
+					}
+					current = current.next
+				}
+				if b {
+					log.Println("duplucated message")
+					data = data[:]
 					break
 				}
 
-				final := hashNonceList[len(hashNonceList) - 1]
-				hashNonceListMutex.Lock()
-				hashNonceList = append(hashNonceList, hashNonce)
-				final.next = hashNonce
-				hashNonce.next = hashNonceList[0]
-				hashNonceListMutex.Unock()
-				go hashNonce.countDown(final)
+				if hashNonceCurrent != nil {
+					hashNonceCurrent.prev = hashNonceCurrent
+					hashNonceCurrent.next = hashNonce
+				} else {
+					hashNonceFirst, hashNonceCurrent = hashNonce, hashNonce
+				}
+				hashNonce.next = hashNonceFirst
+				hashNonceCurrent = hashNonce
+
+				go hashNonce.countDown()
+				hashNonceMutex.Lock()
 			}
 
 			bodyEnd := PACKET_HEAD_LEN + bodyLength
@@ -272,7 +289,7 @@ func listenAccept(ln net.Listener, event *Event_T, processLogic func(int, []byte
 func decodeData(data []byte) (uint8, int, *hashNonce_T, error) {
 	command := uint8(data[PACKET_IDENTIFY_LEN])
 
-	bodyLength, err := bytesToInt(data[PACKET_COMMAND_END_LEN : PACKET_HEAD_LEN])
+	bodyLength, err := bytesToInt(data[PACKET_COMMAND_END_LEN : PACKET_BODY_SIZE_END_LEN])
 	if err != nil {
 		data = data[0:0]
 		return 0, 0, nil, err
@@ -284,7 +301,7 @@ func decodeData(data []byte) (uint8, int, *hashNonce_T, error) {
 	hash := make([]byte, 0, PACKET_HASH_LEN)
 	copy(hash, data[PACKET_NONCE_END_LEN : PACKET_HEAD_LEN])
 
-	hashNonce := &hashNonce_T{hash, nonce, timestamp, nil}
+	hashNonce := &hashNonce_T{hash, nonce, timestamp, nil, nil}
 
 	return command, bodyLength, hashNonce, nil
 }
@@ -362,6 +379,7 @@ func tcpHandle(command uint8, data []byte, conn *net.TCPConn, event *Event_T, pr
 	case ACTION_CONNECTION_NOTICE:
 		fmt.Println("case 1:")
 
+		fmt.Println(data)
 		// Decode 对方客户端 addr
 		ip := net.IP(data[:16])
 		rAddrC := &net.TCPAddr{ip, int(data[16]) << 8 | int(data[17]), ""}
@@ -374,6 +392,8 @@ func tcpHandle(command uint8, data []byte, conn *net.TCPConn, event *Event_T, pr
 		}
 
 		d := net.Dialer {Control: controlSockReusePortUnix, LocalAddr: lAddr}
+		fmt.Println(rAddrC.Network(), rAddrC.String())
+		fmt.Println("-------------------")
 		connc, err := d.Dial(rAddrC.Network(), rAddrC.String())
 		if err != nil {
 			log.Println(err)
@@ -696,7 +716,8 @@ func send(conn *net.TCPConn, data []byte) error {
 
 	sendData = append(sendData, random.Bytes()...) // nonce
 
-	hash := sha256.Sum256(nil)
+	hash := sha256.Sum256(sendData[PACKET_IDENTIFY_LEN : PACKET_NONCE_END_LEN])
+	fmt.Println(hex.EncodeToString(hash[:]))
 
 	sendData = append(sendData, hash[:]...) // hash
 	sendData = append(sendData, data...)
