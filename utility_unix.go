@@ -37,12 +37,12 @@ func intToBytes(i int) []byte {
 	return []byte{uint8(i >> 56), uint8(i << 8 >> 56), uint8(i << 16 >> 56), uint8(i << 24 >> 56), uint8(i << 32 >> 56), uint8(i << 40 >> 56), uint8(i << 48 >> 56), uint8(i << 56 >> 56)}
 }
 
-func bytesToInt32(b []byte) (int, error) {
+func bytesToInt32(b []byte) (int32, error) {
 	if len(b) != 4 {
 		return 0, errors.New("bytesToInt4: bytes length must be 4")
 	}
 
-	return int(uint8(b[0])) << 24 | int(uint8(b[1])) << 16 | int(uint8(b[2])) << 8 | int(uint8(b[3])), nil
+	return int32(uint8(b[0])) << 24 | int32(uint8(b[1])) << 16 | int32(uint8(b[2])) << 8 | int32(uint8(b[3])), nil
 }
 
 func int32ToBytes(i int32) []byte {

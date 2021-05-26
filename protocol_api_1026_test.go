@@ -3,12 +3,12 @@ package gop2p
 import (
 	"testing"
 	"net/rpc/jsonrpc"
-//	"fmt"
+	"fmt"
 	"log"
 )
 
 func cmdHandle(methodName string, args interface{}, reply interface{}) error {
-	client, err := jsonrpc.Dial("tcp", ":1025")
+	client, err := jsonrpc.Dial("tcp", ":1026")
 	if err != nil {
 		return err
 	}
@@ -23,12 +23,12 @@ func cmdHandle(methodName string, args interface{}, reply interface{}) error {
 }
 
 func TestApi(t *testing.T) {
-//	var reply string
-	err := cmdHandle("Api", nil, nil)
-//	err := cmdHandle("GetHashNonces", nil, &reply)
+	var reply string
+//	err := cmdHandle("Api", nil, nil)
+	err := cmdHandle("GetHashNonces", nil, &reply)
 	if err != nil {
 		log.Fatal(err)
 	}
 
-//	fmt.Println(reply)
+	fmt.Println(reply)
 }

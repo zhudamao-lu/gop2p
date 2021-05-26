@@ -67,7 +67,7 @@ func init() {
 
 func TestMain(t *testing.T) {
 	seeds := []string {
-	//	"47.98.204.151:36449",
+		"47.98.204.151:38575",
 	}
 
 	go func() {
@@ -102,8 +102,14 @@ func processLogic(api int32, head, data []byte, conn *net.TCPConn) error {
 		log.Println("api 1:", string(data))
 	}
 
+//	fmt.Println("head:", head)
+
 	Forward(append(head, ContactApiHead(api, data)...)) // forward
 
+	return nil
+}
+
+func broadcast(api int, data []byte) error {
 	return nil
 }
 
@@ -143,8 +149,8 @@ func (c *RPCCommandServer)GetHashNonces(args interface{}, reply *string) error {
 func startRPCCommandServer() error {
 	rpc.Register(&RPCCommandServer{})
 
-	port := ":1025"
-//	port := ":1026"
+//	port := ":1025"
+	port := ":1026"
 //	port := ":1027"
 
 	ln, err := net.Listen("tcp", port)

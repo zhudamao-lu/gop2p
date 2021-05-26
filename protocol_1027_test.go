@@ -67,7 +67,7 @@ func init() {
 
 func TestMain(t *testing.T) {
 	seeds := []string {
-	//	"47.98.204.151:36449",
+		"47.98.204.151:44463",
 	}
 
 	go func() {
@@ -143,9 +143,9 @@ func (c *RPCCommandServer)GetHashNonces(args interface{}, reply *string) error {
 func startRPCCommandServer() error {
 	rpc.Register(&RPCCommandServer{})
 
-	port := ":1025"
+//	port := ":1025"
 //	port := ":1026"
-//	port := ":1027"
+	port := ":1027"
 
 	ln, err := net.Listen("tcp", port)
 	if err != nil {
