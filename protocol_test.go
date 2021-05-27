@@ -67,7 +67,9 @@ func init() {
 
 func TestMain(t *testing.T) {
 	seeds := []string {
-	//	"47.98.204.151:36449",
+		"47.117.44.142:42277", // mtcoin1
+        //	"139.196.181.139:42555", // mtcoin2
+	//	"47.98.204.151:34553", // mtcoin3
 	}
 
 	go func() {
@@ -94,7 +96,14 @@ func syncron() error {
 	return nil
 }
 
-func processLogic(api int32, head, data []byte, conn *net.TCPConn) error {
+func processLogic(head, body []byte, conn *net.TCPConn) error {
+	api, err := GetApiFromBody(body)
+	if err != nil {
+		return err
+	}
+
+	data := GetDataFromBody(body)
+
 	switch api {
 	case 0:
 		log.Println("api 0:", string(data))
@@ -102,7 +111,7 @@ func processLogic(api int32, head, data []byte, conn *net.TCPConn) error {
 		log.Println("api 1:", string(data))
 	}
 
-	Forward(append(head, ContactApiHead(api, data)...)) // forward
+	Forward(append(head, body...)) // forward
 
 	return nil
 }
@@ -131,7 +140,7 @@ func (c *RPCCommandServer)GetHashNonces(args interface{}, reply *string) error {
 		*reply += fmt.Sprintln("hashNonce hash:", hex.EncodeToString(hashNonce.hash))
 		*reply += fmt.Sprintln("hashNonce nonce:", hex.EncodeToString(hashNonce.nonce))
 		*reply += fmt.Sprintln("hashNonce time:", hashNonce.timestamp)
-		*reply += "-------------------------------"
+		*reply += "-------------------------------\n"
 		hashNonce = hashNonce.next
 	}
 

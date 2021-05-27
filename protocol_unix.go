@@ -103,7 +103,7 @@ func GetSeedAddrs() map[*net.TCPAddr]bool {
 */
 
 // func connectSeed(lAddr *net.TCPAddr, seedAddrsStr []string, processLogic func(int, []byte, *net.TCPConn) error) error {
-func connectSeed(lAddr *net.TCPAddr, seedAddrsStr []string, addSeedsNow bool, event *Event_T, processLogic func(int32, []byte, []byte, *net.TCPConn) error) error {
+func connectSeed(lAddr *net.TCPAddr, seedAddrsStr []string, addSeedsNow bool, event *Event_T, processLogic func([]byte, []byte, *net.TCPConn) error) error {
 	for _, v := range seedAddrsStr {
 		addr, err := net.ResolveTCPAddr("tcp", v)
 		if err != nil {
@@ -161,7 +161,7 @@ func connectSeed(lAddr *net.TCPAddr, seedAddrsStr []string, addSeedsNow bool, ev
 	做出的相应动作. 第一个参数将会是对方传来数据的body中前4个字节.
 	该func 由用户实现, 并传入 StartTCPTurnServer.
 */
-func StartTCPTurnServer(seedAddrsStr []string, addSeedsNow bool, event *Event_T, processLogic func(int32, []byte, []byte, *net.TCPConn) error) error {
+func StartTCPTurnServer(seedAddrsStr []string, addSeedsNow bool, event *Event_T, processLogic func([]byte, []byte, *net.TCPConn) error) error {
 	var listenConfig net.ListenConfig
 	listenConfig = net.ListenConfig{Control: controlSockReusePortUnix}
 
@@ -186,7 +186,7 @@ func StartTCPTurnServer(seedAddrsStr []string, addSeedsNow bool, event *Event_T,
 	return nil
 }
 
-func handleTCPConnection(conn *net.TCPConn, event *Event_T, processLogic func(int32, []byte, []byte, *net.TCPConn) error) {
+func handleTCPConnection(conn *net.TCPConn, event *Event_T, processLogic func([]byte, []byte, *net.TCPConn) error) {
 	defer conn.Close()
 
 	data := make([]byte, 0, 4096)
@@ -229,7 +229,7 @@ func handleTCPConnection(conn *net.TCPConn, event *Event_T, processLogic func(in
 	}
 }
 
-func listenAccept(ln net.Listener, event *Event_T, processLogic func(int32, []byte, []byte, *net.TCPConn) error) {
+func listenAccept(ln net.Listener, event *Event_T, processLogic func([]byte, []byte, *net.TCPConn) error) {
 	defer ln.Close()
 	for {
 		conn, err := ln.Accept()
@@ -280,7 +280,7 @@ func decodeData(data []byte) (uint8, []byte, int, *hashNonce_T, error) {
 	return command, nil, bodyLength, hashNonce, nil
 }
 
-func tcpHandle(command uint8, headForHash, data []byte, hashNonce *hashNonce_T, conn *net.TCPConn, event *Event_T, processLogic func(int32, []byte, []byte, *net.TCPConn) error) {
+func tcpHandle(command uint8, headForHash, data []byte, hashNonce *hashNonce_T, conn *net.TCPConn, event *Event_T, processLogic func([]byte, []byte, *net.TCPConn) error) {
 //	defer handlePanic("tcpHandle")
 
 	switch command {
@@ -667,13 +667,7 @@ func tcpHandle(command uint8, headForHash, data []byte, hashNonce *hashNonce_T, 
 		go hashNonce.countDown()
 		hashNonceMutex.Unlock()
 
-		api, err := bytesToInt32(data[:4])
-		if err != nil {
-			log.Println(err)
-			break
-		}
-
-		err = processLogic(api, head, data[4:], conn)
+		err := processLogic(head, data, conn)
 		if err != nil {
 			log.Println(err)
 			break
@@ -787,8 +781,17 @@ func Forward(data []byte) {
 	}
 }
 
-func ContactApiHead(api int32, head []byte) []byte {
-	return append(int32ToBytes(api), head...)
+func GetApiFromBody(body []byte) (int32, error) {
+	api, err := bytesToInt32(body[:4])
+	if err != nil {
+		return 0, err
+	}
+
+	return api, nil
+}
+
+func GetDataFromBody(body []byte) []byte {
+	return body[:4]
 }
 
 /*
