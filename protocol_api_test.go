@@ -3,7 +3,7 @@ package gop2p
 import (
 	"testing"
 	"net/rpc/jsonrpc"
-//	"fmt"
+	"fmt"
 	"log"
 )
 
@@ -23,8 +23,12 @@ func cmdHandle(methodName string, args interface{}, reply interface{}) error {
 }
 
 func TestApi(t *testing.T) {
-	err := cmdHandle("Api", nil, nil)
+	var reply string
+//	err := cmdHandle("Api", nil, nil)
+	err := cmdHandle("GetHashNonces", nil, &reply)
 	if err != nil {
 		log.Fatal(err)
 	}
+
+	fmt.Println(reply)
 }
