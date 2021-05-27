@@ -803,7 +803,7 @@ func GetApiFromBody(body []byte) (int32, error) {
 	param body is the body part of the incoming packet content.
 */
 func GetDataFromBody(body []byte) []byte {
-	return body[:4]
+	return body[4:]
 }
 
 /*
