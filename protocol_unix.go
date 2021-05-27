@@ -770,6 +770,10 @@ func send(conn *net.TCPConn, timestamp int64, random, data []byte) error {
 	return nil
 }
 
+/*
+	Forward the incoming packet by broadcasting.
+	param data is the packet content
+*/
 func Forward(data []byte) {
 	for conn, _ := range peers {
 		_, err := conn.Write(data)
@@ -781,6 +785,10 @@ func Forward(data []byte) {
 	}
 }
 
+/*
+	GetApiFromBody will return an api number and error.
+	param body is the body part of the incoming packet content.
+*/
 func GetApiFromBody(body []byte) (int32, error) {
 	api, err := bytesToInt32(body[:4])
 	if err != nil {
@@ -790,6 +798,10 @@ func GetApiFromBody(body []byte) (int32, error) {
 	return api, nil
 }
 
+/*
+	GetDataFromBody will return an body without api number and error.
+	param body is the body part of the incoming packet content.
+*/
 func GetDataFromBody(body []byte) []byte {
 	return body[:4]
 }
