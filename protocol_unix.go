@@ -203,12 +203,9 @@ func handleTCPConnection(conn *net.TCPConn, event *Event_T, processLogic func([]
 		}
 
 		data = append(data, buffer[:n]...)
-		fmt.Println("head:", data)
 
-		fmt.Println("identify:", string(data[:PACKET_IDENTIFY_LEN]))
 		for string(data[:PACKET_IDENTIFY_LEN]) == PACKET_IDENTIFY {
 			command, headForHash, bodyLength, hashNonce, err = decodeData(data)
-			fmt.Println(hex.EncodeToString(headForHash))
 			if err != nil {
 				log.Println(err)
 				data = data[:]
@@ -245,14 +242,12 @@ func listenAccept(ln net.Listener, event *Event_T, processLogic func([]byte, []b
 
 func decodeData(data []byte) (uint8, []byte, int, *hashNonce_T, error) {
 	command := uint8(data[PACKET_IDENTIFY_LEN])
-//	fmt.Println("command:", command)
 
 	bodyLength, err := bytesToInt(data[PACKET_COMMAND_END_LEN : PACKET_BODY_SIZE_END_LEN])
 	if err != nil {
 		data = data[0:0]
 		return 0, nil, 0, nil, err
 	}
-//	fmt.Println("bodyLength:", bodyLength)
 
 	timestamp, err := bytesToInt64(data[PACKET_BODY_SIZE_END_LEN : PACKET_TIME_END_LEN])
 	if err != nil {
@@ -270,12 +265,6 @@ func decodeData(data []byte) (uint8, []byte, int, *hashNonce_T, error) {
 		copy(headForHash, data[PACKET_IDENTIFY_LEN : PACKET_NONCE_END_LEN])
 		return command, headForHash, bodyLength, hashNonce, nil
 	}
-
-	/*
-	fmt.Println("timestamp:", hashNonce.timestamp)
-	fmt.Println("nonce:", hashNonce.nonce)
-	fmt.Println("hash:", hashNonce.hash)
-	*/
 
 	return command, nil, bodyLength, hashNonce, nil
 }
@@ -604,7 +593,6 @@ func tcpHandle(command uint8, headForHash, data []byte, hashNonce *hashNonce_T, 
 	case ACTION_CONNECTION_LOGIC:
 		fmt.Println("case 5:")
 
-		fmt.Println("coming data:", hex.EncodeToString(headForHash))
 		sum := sha256.Sum256(headForHash)
 		fmt.Println("coming hash:", hex.EncodeToString(sum[:]))
 		if hex.EncodeToString(sum[:]) != hex.EncodeToString(hashNonce.hash) {
