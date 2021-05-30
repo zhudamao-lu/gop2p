@@ -95,6 +95,12 @@ func AddPeer(conn *net.TCPConn) {
 	peers[conn] = true
 }
 
+func RemovePeer(conn *net.TCPConn) {
+	conn.Close()
+	delete(peers, conn)
+	conn = nil
+}
+
 func GetSeedAddrs() map[*net.TCPAddr]bool {
 	return seedAddrs
 }
@@ -548,7 +554,6 @@ func tcpHandle(command uint8, headForHash, data []byte, hashNonce *hashNonce_T, 
 		sendData = append(sendData, make([]byte, 32, 32)...) // hash
 		sendData = append(sendData, body...)
 
-	//	var tf bool
 		for k, _ := range peers {
 			if k.RemoteAddr().Network() == rAddrC.Network() && k.RemoteAddr().String() == rAddrC.String() {
 				fmt.Println("B has A:", k.LocalAddr(), k.RemoteAddr())
@@ -559,41 +564,15 @@ func tcpHandle(command uint8, headForHash, data []byte, hashNonce *hashNonce_T, 
 				}
 				fmt.Println("n:", n)
 
-			//	tf = true
 				break
 			}
 		}
-
-		/*
-		if tf {
-			lAddr, err := net.ResolveTCPAddr(conn.LocalAddr().Network(), conn.LocalAddr().String())
-			if err != nil {
-				log.Println(err)
-			}
-
-			d := net.Dialer {Control: controlSockReusePortUnix, LocalAddr: lAddr}
-			connc, err := d.Dial(rAddrC.Network(), rAddrC.String())
-			if err != nil {
-				log.Println(err)
-				break
-			}
-		}
-		*/
 
 		err := event.OnNotice2(command, conn)
 		if err != nil {
 			log.Println(err)
 			break
 		}
-
-		/*
-		if EventsArrayFunc[command] == nil { break }
-		err = EventsArrayFunc[command]()
-		if err != nil {
-			log.Println(err)
-			break
-		}
-		*/
 
 	/*
 		点对点正式通信，此时穿透服已不需要
@@ -813,12 +792,3 @@ func GetDataFromBody(body []byte) []byte {
 func GetComingConns() map[*net.TCPConn]bool {
 	return comingConns
 }
-
-/*
-func handlePanic(funcname string) {
-	err := recover()
-	if err != nil {
-		log.Println("in", funcname, "panic:", err)
-	}
-}
-*/
