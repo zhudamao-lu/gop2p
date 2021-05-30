@@ -73,7 +73,8 @@ var (
 	peers = make(map[*net.TCPConn]bool, 1024) // 自身看作客户端时，新连接map
 	hashNonceFirst *hashNonce_T
 	hashNonceCurrent *hashNonce_T
-
+	MaxConnection = 16
+	justSignalServer = false
 //	EventsArrayFunc [5]func(args ...interface{}) error // 回调事件函数指针数组
 )
 
@@ -280,6 +281,13 @@ func tcpHandle(command uint8, headForHash, data []byte, hashNonce *hashNonce_T, 
 	*/
 	case ACTION_CONNECTION_REQUEST:
 		fmt.Println("case 0:")
+		if !justSignalServer {
+			if len(comingConns) >= MaxConnection || len(peers) >= MaxConnection {
+				fmt.Println("connection number out of bounds")
+				break
+			}
+		}
+
 		for k, v := range comingConns {
 			log.Println(k.LocalAddr(), k.RemoteAddr(), v)
 		}
@@ -339,6 +347,10 @@ func tcpHandle(command uint8, headForHash, data []byte, hashNonce *hashNonce_T, 
 	*/
 	case ACTION_CONNECTION_NOTICE:
 		fmt.Println("case 1:")
+
+		if len(peers) >= MaxConnection {
+			return
+		}
 
 		// Decode 对方客户端 addr
 		ip := net.IP(data[:16])
@@ -792,6 +804,14 @@ func GetApiFromBody(body []byte) (int32, error) {
 */
 func GetDataFromBody(body []byte) []byte {
 	return body[4:]
+}
+
+/*
+	GetComingConns return the coming connections map.
+	When the peer thought of a signal server, its incoming peer called coming-connection.
+*/
+func GetComingConns() map[*net.TCPConn]bool {
+	return comingConns
 }
 
 /*
