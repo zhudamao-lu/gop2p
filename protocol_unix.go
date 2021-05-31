@@ -383,7 +383,7 @@ func tcpHandle(command uint8, headForHash, data []byte, hashNonce *hashNonce_T, 
 		sendData = append(sendData, []byte{0xff, 0xff, 0xff, 0xff}...) // nonce
 		sendData = append(sendData, make([]byte, 32, 32)...) // hash
 		sendData = append(sendData, body...)
-		_, err := connc.Write(sendData)
+		_, err = connc.Write(sendData)
 		if err != nil {
 			log.Println(err)
 			break
@@ -504,7 +504,7 @@ func tcpHandle(command uint8, headForHash, data []byte, hashNonce *hashNonce_T, 
 		sendData = append(sendData, []byte{0xff, 0xff, 0xff, 0xff}...) // nonce
 		sendData = append(sendData, make([]byte, 32, 32)...) // hash
 		sendData = append(sendData, body...)
-		_, err := connStB.Write(sendData)
+		_, err = connStB.Write(sendData)
 		if err != nil {
 			log.Println(err)
 			break
