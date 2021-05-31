@@ -317,12 +317,11 @@ func tcpHandle(command uint8, headForHash, data []byte, hashNonce *hashNonce_T, 
 			sendData = append(sendData, []byte{0xff, 0xff, 0xff, 0xff}...) // nonce
 			sendData = append(sendData, make([]byte, 32, 32)...) // hash
 			sendData = append(sendData, body...)
-			n, err := k.Write(sendData)
+			_, err := k.Write(sendData)
 			if err != nil {
 				delete(comingConns, k)
 				continue
 			}
-			log.Println("n:", n)
 		}
 
 		comingConns[conn] = true
@@ -384,13 +383,11 @@ func tcpHandle(command uint8, headForHash, data []byte, hashNonce *hashNonce_T, 
 		sendData = append(sendData, []byte{0xff, 0xff, 0xff, 0xff}...) // nonce
 		sendData = append(sendData, make([]byte, 32, 32)...) // hash
 		sendData = append(sendData, body...)
-		log.Println("sendData:", sendData)
-		n, err := connc.Write(sendData)
+		_, err := connc.Write(sendData)
 		if err != nil {
 			log.Println(err)
 			break
 		}
-		log.Println("n:", n)
 
 		// 告知穿透服已打洞
 		body = []byte("turned...")
@@ -402,12 +399,11 @@ func tcpHandle(command uint8, headForHash, data []byte, hashNonce *hashNonce_T, 
 		sendData = append(sendData, []byte{0xff, 0xff, 0xff, 0xff}...) // nonce
 		sendData = append(sendData, make([]byte, 32, 32)...) // hash
 		sendData = append(sendData, body...)
-		n, err = conn.Write(sendData)
+		_, err = conn.Write(sendData)
 		if err != nil {
 			log.Println(err)
 			break
 		}
-		log.Println("n:", n)
 
 		err = event.OnNotice(command, conn)
 		if err != nil {
@@ -508,12 +504,11 @@ func tcpHandle(command uint8, headForHash, data []byte, hashNonce *hashNonce_T, 
 		sendData = append(sendData, []byte{0xff, 0xff, 0xff, 0xff}...) // nonce
 		sendData = append(sendData, make([]byte, 32, 32)...) // hash
 		sendData = append(sendData, body...)
-		n, err := connStB.Write(sendData)
+		_, err := connStB.Write(sendData)
 		if err != nil {
 			log.Println(err)
 			break
 		}
-		fmt.Println("n:", n)
 
 		err = event.OnTurning(command, conn)
 		if err != nil {
@@ -557,12 +552,11 @@ func tcpHandle(command uint8, headForHash, data []byte, hashNonce *hashNonce_T, 
 		for k, _ := range peers {
 			if k.RemoteAddr().Network() == rAddrC.Network() && k.RemoteAddr().String() == rAddrC.String() {
 				fmt.Println("B has A:", k.LocalAddr(), k.RemoteAddr())
-				n, err := k.Write(sendData)
+				_, err := k.Write(sendData)
 				if err != nil {
 					log.Println(err)
 					break
 				}
-				fmt.Println("n:", n)
 
 				break
 			}
@@ -732,15 +726,9 @@ func send(conn *net.TCPConn, timestamp int64, random, data []byte) error {
 	sendData = append(sendData, intToBytes(len(data))...)
 	sendData = append(sendData, int64ToBytes(timestamp)...) // timestamp
 	sendData = append(sendData, random...) // nonce
-	fmt.Println("sendData:", hex.EncodeToString(sendData[PACKET_IDENTIFY_LEN : PACKET_NONCE_END_LEN]))
-
 	hash := sha256.Sum256(sendData[PACKET_IDENTIFY_LEN : PACKET_NONCE_END_LEN])
-	fmt.Println("send hash:", hex.EncodeToString(hash[:]))
-
 	sendData = append(sendData, hash[:]...) // hash
 	sendData = append(sendData, data...)
-	fmt.Println("sendData final:", hex.EncodeToString(sendData))
-	fmt.Println("----------------------------------")
 	_, err := conn.Write(sendData)
 	if err != nil {
 		return err
