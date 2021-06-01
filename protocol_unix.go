@@ -770,7 +770,9 @@ func GetApiFromBody(body []byte) (int32, error) {
 	param body is the body part of the incoming packet content.
 */
 func GetDataFromBody(body []byte) []byte {
-	return body[4:]
+	data := make([]byte, len(body) - 4, len(body) - 4)
+	copy(data, body[4:])
+	return data
 }
 
 /*
