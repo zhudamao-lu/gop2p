@@ -215,6 +215,7 @@ func handleTCPConnection(conn *net.TCPConn, event *Event_T, processLogic func([]
 			continue
 		}
 
+		fmt.Println(data, len(data))
 		for string(data[:PACKET_IDENTIFY_LEN]) == PACKET_IDENTIFY {
 			command, headForHash, bodyLength, hashNonce, err = decodeData(data)
 			if err != nil {
