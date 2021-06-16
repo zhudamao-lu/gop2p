@@ -208,6 +208,14 @@ func handleTCPConnection(conn *net.TCPConn, event *Event_T, processLogic func([]
 	defer conn.Close()
 
 	data := make([]byte, 0, 4096)
+
+	defer func() {
+		err := recover()
+		if err != nil {
+			fmt.Println("recover")
+			fmt.Println(data, len(data))
+		}
+	}()
 	var command uint8
 	var headForHash []byte
 	var bodyLength int
@@ -240,7 +248,11 @@ func handleTCPConnection(conn *net.TCPConn, event *Event_T, processLogic func([]
 
 		data = append(data, buffer[:n]...)
 
-		for string(data[:PACKET_IDENTIFY_LEN]) == PACKET_IDENTIFY {
+		if len(data) < PACKET_IDENTIFY_LEN {
+			continue
+		}
+
+		for len(data) >= PACKET_IDENTIFY_LEN && string(data[:PACKET_IDENTIFY_LEN]) == PACKET_IDENTIFY {
 			command, headForHash, bodyLength, hashNonce, err = decodeData(data)
 			if err != nil {
 				log.Println(err)
