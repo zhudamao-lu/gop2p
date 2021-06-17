@@ -18,6 +18,7 @@ import (
 	"encoding/hex"
 	"math/big"
 	"context"
+	"runtime"
 	"sync"
 	"net"
 	"time"
@@ -27,11 +28,12 @@ import (
 
 const (
 	ACTION_CONNECTION_REQUEST = uint8(0x00) // 接入请求
-	ACTION_CONNECTION_NOTICE = uint8(0x01) // 新增接入通知，并开始穿透
-	ACTION_CONNECTION_TURN_OK = uint8(0x02) // 收到则穿透成功
-	ACTION_CONNECTION_TURNING = uint8(0x03) // 服务器被告知已做过一次穿透，并通知另一客户端反向访问
-	ACTION_CONNECTION_NOTICE2 = uint8(0x04) // 第二次穿透访问
-	ACTION_CONNECTION_LOGIC = uint8(0x05) // peer to peer 之间处理正式通信内容
+	ACTION_CONNECTION_RESPONSE = uint8(0x01) // 接入返回
+	ACTION_CONNECTION_NOTICE = uint8(0x02) // 新增接入通知，并开始穿透
+	ACTION_CONNECTION_TURN_OK = uint8(0x03) // 收到则穿透成功
+	ACTION_CONNECTION_TURNING = uint8(0x04) // 服务器被告知已做过一次穿透，并通知另一客户端反向访问
+	ACTION_CONNECTION_NOTICE2 = uint8(0x05) // 第二次穿透访问
+	ACTION_CONNECTION_LOGIC = uint8(0x06) // peer to peer 之间处理正式通信内容
 
 	PACKET_IDENTIFY = "--TCPHEADX--" // 包开始标识符
 	PACKET_IDENTIFY_LEN = 0xc // 包开始标识符长度 12
@@ -79,12 +81,25 @@ var (
 )
 
 type Event_T struct {
-	Args [5]interface{}
+	Args [6]interface{}
 	OnRequest func(command uint8, innerArgs ...interface{}) error
+	OnResponse func(command uint8, innerArgs ...interface{}) error
 	OnNotice func(command uint8, innerArgs ...interface{}) error
 	OnOK func(command uint8, innerArgs ...interface{}) error
 	OnTurning func(command uint8, innerArgs ...interface{}) error
 	OnNotice2 func(command uint8, innerArgs ...interface{}) error
+	OnDisconnect func(notice []*DisconnectNotice_T)
+}
+
+type DisconnectNotice_T struct {
+	NoticeCh chan interface{}
+	Param interface{}
+}
+
+var DisconnectNotices []*DisconnectNotice_T
+
+func init() {
+	DisconnectNotices = make([]*DisconnectNotice_T, 0, 8)
 }
 
 func GetPeers() map[*net.TCPConn]bool {
@@ -201,8 +216,11 @@ func handleTCPConnection(conn *net.TCPConn, event *Event_T, processLogic func([]
 	defer func() {
 		err := recover()
 		if err != nil {
-			fmt.Println("recover")
-			fmt.Println(data, len(data))
+			fmt.Println(err)
+			buf := make([]byte, 2048)
+
+			n := runtime.Stack(buf, false)
+			log.Println(string(buf[:n]))
 		}
 	}()
 	var command uint8
@@ -214,6 +232,9 @@ func handleTCPConnection(conn *net.TCPConn, event *Event_T, processLogic func([]
 		n, err := conn.Read(buffer)
 		if err != nil {
 			log.Println(err)
+			delete(peers, conn)
+			fmt.Println(len(DisconnectNotices))
+			event.OnDisconnect(DisconnectNotices)
 			break
 		}
 
@@ -331,9 +352,22 @@ func tcpHandle(command uint8, headForHash, data []byte, hashNonce *hashNonce_T, 
 			sendData = append(sendData, body...)
 			_, err := k.Write(sendData)
 			if err != nil {
+				log.Println(err)
 				delete(comingConns, k)
 				continue
 			}
+		}
+
+		sendData := []byte(PACKET_IDENTIFY)
+		sendData = append(sendData, byte(ACTION_CONNECTION_RESPONSE))
+		sendData = append(sendData, []byte{0, 0, 0, 0, 0, 0, 0, 0}...)
+		sendData = append(sendData, []byte{0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff}...) // timestamp
+		sendData = append(sendData, []byte{0xff, 0xff, 0xff, 0xff}...) // nonce
+		sendData = append(sendData, make([]byte, 32, 32)...) // hash
+		_, err = conn.Write(sendData)
+		if err != nil {
+			log.Println(err)
+			delete(comingConns, conn)
 		}
 
 		comingConns[conn] = true
@@ -345,16 +379,18 @@ func tcpHandle(command uint8, headForHash, data []byte, hashNonce *hashNonce_T, 
 			break
 		}
 
-		/*
-		if EventsArrayFunc[command] == nil { break }
-		err = EventsArrayFunc[command]()
+	/*
+		自己作为新节点收到穿透服发来的确认加入信息
+		连接关系:
+		source:S distination:B
+	*/
+	case ACTION_CONNECTION_RESPONSE:
+		fmt.Println("case 1:")
+		err := event.OnResponse(command, conn)
 		if err != nil {
 			log.Println(err)
 			break
 		}
-		*/
-
-
 
 	/*
 		收到穿透服务器发来的，新节点加入信息
@@ -363,7 +399,7 @@ func tcpHandle(command uint8, headForHash, data []byte, hashNonce *hashNonce_T, 
 		source:S distination:A data:B
 	*/
 	case ACTION_CONNECTION_NOTICE:
-		fmt.Println("case 1:")
+		fmt.Println("case 2:")
 
 		if len(peers) >= MaxConnection {
 			return
@@ -449,7 +485,7 @@ func tcpHandle(command uint8, headForHash, data []byte, hashNonce *hashNonce_T, 
 		表示穿透成功，可以在此case中继续后续回调执行上层逻辑
 	*/
 	case ACTION_CONNECTION_TURN_OK:
-		fmt.Println("case 2:")
+		fmt.Println("case 3:")
 		fmt.Println(string(data[:7]))
 		for k, _ := range comingConns {
 			if k.RemoteAddr() == conn.RemoteAddr() {
@@ -484,7 +520,7 @@ func tcpHandle(command uint8, headForHash, data []byte, hashNonce *hashNonce_T, 
 		source:A distination:S data:B
 	*/
 	case ACTION_CONNECTION_TURNING:
-		fmt.Println("case 3:")
+		fmt.Println("case 4:")
 		fmt.Println(string(data[:9]))
 
 		// Decode 对方客户端 addr
@@ -544,7 +580,7 @@ func tcpHandle(command uint8, headForHash, data []byte, hashNonce *hashNonce_T, 
 		source:S distination:B data:A
 	*/
 	case ACTION_CONNECTION_NOTICE2:
-		fmt.Println("case 4:")
+		fmt.Println("case 5:")
 
 		// Decode 对方客户端 addr
 		ip := net.IP(data[:16])
@@ -588,7 +624,7 @@ func tcpHandle(command uint8, headForHash, data []byte, hashNonce *hashNonce_T, 
 		source:B distination:A
 	*/
 	case ACTION_CONNECTION_LOGIC:
-		fmt.Println("case 5:")
+		fmt.Println("case 6:")
 
 		sum := sha256.Sum256(headForHash)
 		fmt.Println("coming hash:", hex.EncodeToString(sum[:]))
@@ -793,4 +829,10 @@ func GetDataFromBody(body []byte) []byte {
 */
 func GetComingConns() map[*net.TCPConn]bool {
 	return comingConns
+}
+
+func DefaultDisconnectEvent(notices []*DisconnectNotice_T) {
+	for k, n := range notices {
+		n.NoticeCh <- n.Param
+	}
 }
