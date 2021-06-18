@@ -101,7 +101,6 @@ func AddPeer(conn *net.TCPConn) {
 	connStatus := connStatus_T{
 		c: make(chan int),
 		b: true,
-
 	}
 	peers[conn] = &connStatus
 }
@@ -228,10 +227,12 @@ func handleTCPConnection(conn *net.TCPConn, event *Event_T, processLogic func([]
 				continue
 			}
 			if peers[conn] != nil {
-				log.Println("peers conn nil continue")
 				continue
 			}
-			log.Println("write chan value :", totalSecondCount)
+			_, ok := peers[conn]
+			if ok == false {
+				continue
+			}
 			peers[conn].c <- totalSecondCount
 			totalSecondCount = 0
 		}
@@ -244,7 +245,7 @@ func handleTCPConnection(conn *net.TCPConn, event *Event_T, processLogic func([]
 			log.Println(err)
 			break
 		}
-		totalSecondCount += n 
+		totalSecondCount += n
 
 		data = append(data, buffer[:n]...)
 
@@ -268,15 +269,10 @@ func handleTCPConnection(conn *net.TCPConn, event *Event_T, processLogic func([]
 				data = data[bodyEnd :]
 				continue
 			}
-
 			break
 		}
 	}
-
 }
-
-
-
 
 func listenAccept(ln net.Listener, event *Event_T, processLogic func([]byte, []byte, *net.TCPConn) error) {
 	defer ln.Close()

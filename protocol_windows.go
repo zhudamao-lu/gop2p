@@ -67,14 +67,20 @@ func (hn *hashNonce_T) countDown() {
 	hn = nil
 }
 
+type connStatus_T struct{
+	b bool
+	c chan int
+}
+
 var (
 	seedAddrs = make(map[*net.TCPAddr]bool, 1024) // 种子节点地址map
 	comingConns = make(map[*net.TCPConn]bool, 1024) // 自身看作穿透服时，新连接map
-	peers = make(map[*net.TCPConn]bool, 1024) // 自身看作客户端时，新连接map
+	peers = make(map[*net.TCPConn]*connStatus_T, 1024) // 自身看作客户端时，新连接map
 	hashNonceFirst *hashNonce_T
 	hashNonceCurrent *hashNonce_T
 	MaxConnection = 16
 	justSignalServer = false
+	totalSecondCount int
 //	EventsArrayFunc [5]func(args ...interface{}) error // 回调事件函数指针数组
 )
 
@@ -87,12 +93,16 @@ type Event_T struct {
 	OnNotice2 func(command uint8, innerArgs ...interface{}) error
 }
 
-func GetPeers() map[*net.TCPConn]bool {
+func GetPeers() map[*net.TCPConn]*connStatus_T {
 	return peers
 }
 
 func AddPeer(conn *net.TCPConn) {
-	peers[conn] = true
+	connStatus := connStatus_T{
+		c: make(chan int),
+		b: true,
+	}
+	peers[conn] = &connStatus
 }
 
 func RemovePeer(conn *net.TCPConn) {
@@ -201,6 +211,25 @@ func handleTCPConnection(conn *net.TCPConn, event *Event_T, processLogic func([]
 	var headForHash []byte
 	var bodyLength int
 	var hashNonce *hashNonce_T
+
+	go func(){
+		for {
+			time.Sleep(1 * time.Second)
+			if totalSecondCount == 0 {
+				continue
+			}
+			if peers[conn] != nil {
+				continue
+			}
+			_, ok := peers[conn]
+			if ok == false {
+				continue
+			}
+			peers[conn].c <- totalSecondCount
+			totalSecondCount = 0
+		}
+	}()
+
 	for {
 		buffer := make([]byte, 1024)
 		n, err := conn.Read(buffer)
@@ -208,6 +237,7 @@ func handleTCPConnection(conn *net.TCPConn, event *Event_T, processLogic func([]
 			log.Println(err)
 			break
 		}
+		totalSecondCount += n
 
 		data = append(data, buffer[:n]...)
 
@@ -450,7 +480,7 @@ func tcpHandle(command uint8, headForHash, data []byte, hashNonce *hashNonce_T, 
 		}
 
 		fmt.Println("节点连接成功")
-		peers[conn] = true
+		peers[conn].b = true
 
 	//	go handleTCPConnection(conn, event, processLogic)
 
