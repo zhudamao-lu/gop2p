@@ -90,7 +90,7 @@ func TestMain(t *testing.T) {
 	}()
 
 
-	err := StartTCPTurnServer(seeds, true, event, processLogic)
+	err := StartTCPTurnServer(seeds, event, processLogic)
 	if err != nil {
 		t.Fatal(err)
 	}
