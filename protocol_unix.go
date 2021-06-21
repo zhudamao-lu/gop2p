@@ -125,7 +125,7 @@ func GetSeedAddrs() map[*net.TCPAddr]bool {
 */
 
 // func connectSeed(lAddr *net.TCPAddr, seedAddrsStr []string, processLogic func(int, []byte, *net.TCPConn) error) error {
-func connectSeed(lAddr *net.TCPAddr, seedAddrsStr []string, addSeedsNow bool, event *Event_T, processLogic func([]byte, []byte, *net.TCPConn) error) error {
+func connectSeed(lAddr *net.TCPAddr, seedAddrsStr []string, event *Event_T, processLogic func([]byte, []byte, *net.TCPConn) error) error {
 	for _, v := range seedAddrsStr {
 		addr, err := net.ResolveTCPAddr("tcp", v)
 		if err != nil {
@@ -145,9 +145,6 @@ func connectSeed(lAddr *net.TCPAddr, seedAddrsStr []string, addSeedsNow bool, ev
 			continue
 		}
 		log.Println(connc.LocalAddr())
-		if addSeedsNow {
-			AddPeer(connc.(*net.TCPConn))
-		}
 
 		body := []byte("hello server")
 		data := []byte(PACKET_IDENTIFY)
@@ -183,7 +180,7 @@ func connectSeed(lAddr *net.TCPAddr, seedAddrsStr []string, addSeedsNow bool, ev
 	做出的相应动作. 第一个参数将会是对方传来数据的body中前4个字节.
 	该func 由用户实现, 并传入 StartTCPTurnServer.
 */
-func StartTCPTurnServer(seedAddrsStr []string, addSeedsNow bool, event *Event_T, processLogic func([]byte, []byte, *net.TCPConn) error) error {
+func StartTCPTurnServer(seedAddrsStr []string, event *Event_T, processLogic func([]byte, []byte, *net.TCPConn) error) error {
 	var listenConfig net.ListenConfig
 	listenConfig = net.ListenConfig{Control: controlSockReusePortUnix}
 
@@ -200,7 +197,7 @@ func StartTCPTurnServer(seedAddrsStr []string, addSeedsNow bool, event *Event_T,
 	log.Println(lAddr)
 
 //	connectSeed(lAddr, seedAddrsStr, eventsArrayFunc, processLogic)
-	connectSeed(lAddr, seedAddrsStr, addSeedsNow, event, processLogic)
+	connectSeed(lAddr, seedAddrsStr, event, processLogic)
 
 //	listenAccept(ln, eventsArrayFunc, processLogic)
 	listenAccept(ln, event, processLogic)
@@ -832,7 +829,7 @@ func GetComingConns() map[*net.TCPConn]bool {
 }
 
 func DefaultDisconnectEvent(notices []*DisconnectNotice_T) {
-	for k, n := range notices {
+	for _, n := range notices {
 		n.NoticeCh <- n.Param
 	}
 }
