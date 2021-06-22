@@ -88,19 +88,10 @@ type Event_T struct {
 	OnOK func(command uint8, innerArgs ...interface{}) error
 	OnTurning func(command uint8, innerArgs ...interface{}) error
 	OnNotice2 func(command uint8, innerArgs ...interface{}) error
-	OnDisconnect func(notice []*DisconnectNotice_T)
+	OnDisconnect func(peer *net.TCPConn)
 }
 
-type DisconnectNotice_T struct {
-	NoticeCh chan interface{}
-	Param interface{}
-}
-
-var DisconnectNotices []*DisconnectNotice_T
-
-func init() {
-	DisconnectNotices = make([]*DisconnectNotice_T, 0, 8)
-}
+func init() {}
 
 func GetPeers() map[*net.TCPConn]bool {
 	return peers
@@ -124,8 +115,7 @@ func GetSeedAddrs() map[*net.TCPAddr]bool {
 	连接种子节点
 */
 
-// func connectSeed(lAddr *net.TCPAddr, seedAddrsStr []string, processLogic func(int, []byte, *net.TCPConn) error) error {
-func connectSeed(lAddr *net.TCPAddr, seedAddrsStr []string, event *Event_T, processLogic func([]byte, []byte, *net.TCPConn) error) error {
+func connectSeed(lAddr *net.TCPAddr, seedAddrsStr []string, event *Event_T, processLogic func([]byte, []byte, *net.TCPConn)) error {
 	for _, v := range seedAddrsStr {
 		addr, err := net.ResolveTCPAddr("tcp", v)
 		if err != nil {
@@ -180,7 +170,7 @@ func connectSeed(lAddr *net.TCPAddr, seedAddrsStr []string, event *Event_T, proc
 	做出的相应动作. 第一个参数将会是对方传来数据的body中前4个字节.
 	该func 由用户实现, 并传入 StartTCPTurnServer.
 */
-func StartTCPTurnServer(seedAddrsStr []string, event *Event_T, processLogic func([]byte, []byte, *net.TCPConn) error) error {
+func StartTCPTurnServer(seedAddrsStr []string, event *Event_T, processLogic func([]byte, []byte, *net.TCPConn)) error {
 	var listenConfig net.ListenConfig
 	listenConfig = net.ListenConfig{Control: controlSockReusePortUnix}
 
@@ -205,7 +195,7 @@ func StartTCPTurnServer(seedAddrsStr []string, event *Event_T, processLogic func
 	return nil
 }
 
-func handleTCPConnection(conn *net.TCPConn, event *Event_T, processLogic func([]byte, []byte, *net.TCPConn) error) {
+func handleTCPConnection(conn *net.TCPConn, event *Event_T, processLogic func([]byte, []byte, *net.TCPConn)) {
 	defer conn.Close()
 
 	data := make([]byte, 0, 4096)
@@ -230,8 +220,7 @@ func handleTCPConnection(conn *net.TCPConn, event *Event_T, processLogic func([]
 		if err != nil {
 			log.Println(err)
 			delete(peers, conn)
-			fmt.Println(len(DisconnectNotices))
-			event.OnDisconnect(DisconnectNotices)
+			event.OnDisconnect(conn)
 			break
 		}
 
@@ -263,7 +252,7 @@ func handleTCPConnection(conn *net.TCPConn, event *Event_T, processLogic func([]
 	}
 }
 
-func listenAccept(ln net.Listener, event *Event_T, processLogic func([]byte, []byte, *net.TCPConn) error) {
+func listenAccept(ln net.Listener, event *Event_T, processLogic func([]byte, []byte, *net.TCPConn)) {
 	defer ln.Close()
 	for {
 		conn, err := ln.Accept()
@@ -306,7 +295,7 @@ func decodeData(data []byte) (uint8, []byte, int, *hashNonce_T, error) {
 	return command, nil, bodyLength, hashNonce, nil
 }
 
-func tcpHandle(command uint8, headForHash, data []byte, hashNonce *hashNonce_T, conn *net.TCPConn, event *Event_T, processLogic func([]byte, []byte, *net.TCPConn) error) {
+func tcpHandle(command uint8, headForHash, data []byte, hashNonce *hashNonce_T, conn *net.TCPConn, event *Event_T, processLogic func([]byte, []byte, *net.TCPConn)) {
 //	defer handlePanic("tcpHandle")
 
 	switch command {
@@ -350,7 +339,6 @@ func tcpHandle(command uint8, headForHash, data []byte, hashNonce *hashNonce_T, 
 			_, err := k.Write(sendData)
 			if err != nil {
 				log.Println(err)
-				delete(comingConns, k)
 				continue
 			}
 		}
@@ -364,7 +352,6 @@ func tcpHandle(command uint8, headForHash, data []byte, hashNonce *hashNonce_T, 
 		_, err = conn.Write(sendData)
 		if err != nil {
 			log.Println(err)
-			delete(comingConns, conn)
 		}
 
 		comingConns[conn] = true
@@ -685,11 +672,7 @@ func tcpHandle(command uint8, headForHash, data []byte, hashNonce *hashNonce_T, 
 		go hashNonce.countDown()
 		hashNonceMutex.Unlock()
 
-		err := processLogic(head, data, conn)
-		if err != nil {
-			log.Println(err)
-			break
-		}
+		go processLogic(head, data, conn)
 
 	/*
 		用于测试TCP
@@ -725,7 +708,6 @@ func Send(conn *net.TCPConn, api int32, body []byte) error {
 
 	err = send(conn, timestamp, random.Bytes(), data)
 	if err != nil {
-		delete(peers, conn)
 		return err
 	}
 
@@ -758,7 +740,6 @@ func Broadcast(api int32, body []byte) {
 	for conn, _ := range peers {
 		err = send(conn, timestamp, random.Bytes(), data)
 		if err != nil {
-			delete(peers, conn)
 			log.Println(err)
 			continue
 		}
@@ -790,7 +771,6 @@ func Forward(data []byte) {
 	for conn, _ := range peers {
 		_, err := conn.Write(data)
 		if err != nil {
-			delete(peers, conn)
 			log.Println(err)
 			continue
 		}
@@ -828,8 +808,10 @@ func GetComingConns() map[*net.TCPConn]bool {
 	return comingConns
 }
 
+/*
 func DefaultDisconnectEvent(notices []*DisconnectNotice_T) {
 	for _, n := range notices {
 		n.NoticeCh <- n.Param
 	}
 }
+*/
