@@ -88,19 +88,10 @@ type Event_T struct {
 	OnOK func(command uint8, innerArgs ...interface{}) error
 	OnTurning func(command uint8, innerArgs ...interface{}) error
 	OnNotice2 func(command uint8, innerArgs ...interface{}) error
-	OnDisconnect func(notice []*DisconnectNotice_T)
+	OnDisconnect func(peer *net.TCPConn)
 }
 
-type DisconnectNotice_T struct {
-	NoticeCh chan interface{}
-	Param interface{}
-}
-
-var DisconnectNotices []*DisconnectNotice_T
-
-func init() {
-	DisconnectNotices = make([]*DisconnectNotice_T, 0, 8)
-}
+func init() {}
 
 func GetPeers() map[*net.TCPConn]bool {
 	return peers
@@ -230,8 +221,7 @@ func handleTCPConnection(conn *net.TCPConn, event *Event_T, processLogic func([]
 		if err != nil {
 			log.Println(err)
 			delete(peers, conn)
-			fmt.Println(len(DisconnectNotices))
-			event.OnDisconnect(DisconnectNotices)
+			event.OnDisconnect(conn)
 			break
 		}
 
@@ -350,7 +340,6 @@ func tcpHandle(command uint8, headForHash, data []byte, hashNonce *hashNonce_T, 
 			_, err := k.Write(sendData)
 			if err != nil {
 				log.Println(err)
-				delete(comingConns, k)
 				continue
 			}
 		}
@@ -364,7 +353,6 @@ func tcpHandle(command uint8, headForHash, data []byte, hashNonce *hashNonce_T, 
 		_, err = conn.Write(sendData)
 		if err != nil {
 			log.Println(err)
-			delete(comingConns, conn)
 		}
 
 		comingConns[conn] = true
@@ -725,7 +713,6 @@ func Send(conn *net.TCPConn, api int32, body []byte) error {
 
 	err = send(conn, timestamp, random.Bytes(), data)
 	if err != nil {
-		delete(peers, conn)
 		return err
 	}
 
@@ -758,7 +745,6 @@ func Broadcast(api int32, body []byte) {
 	for conn, _ := range peers {
 		err = send(conn, timestamp, random.Bytes(), data)
 		if err != nil {
-			delete(peers, conn)
 			log.Println(err)
 			continue
 		}
@@ -790,7 +776,6 @@ func Forward(data []byte) {
 	for conn, _ := range peers {
 		_, err := conn.Write(data)
 		if err != nil {
-			delete(peers, conn)
 			log.Println(err)
 			continue
 		}
@@ -828,8 +813,10 @@ func GetComingConns() map[*net.TCPConn]bool {
 	return comingConns
 }
 
+/*
 func DefaultDisconnectEvent(notices []*DisconnectNotice_T) {
 	for _, n := range notices {
 		n.NoticeCh <- n.Param
 	}
 }
+*/
