@@ -82,7 +82,7 @@ func TestMain(t *testing.T) {
 	go func (){
 		for {
 			for _,v := range peers{
-				tmpV := <- v.c
+				tmpV := <- v.C
 				log.Println("read chan value: ", tmpV)
 			}
 			time.Sleep(1 * time.Second)

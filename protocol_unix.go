@@ -69,15 +69,15 @@ func (hn *hashNonce_T) countDown() {
 	hn = nil
 }
 
-type connStatus_T struct{
-	b bool
-	c chan int
+type ConnStatus_T struct{
+	B bool
+	C chan int
 }
 
 var (
 	seedAddrs = make(map[*net.TCPAddr]bool, 1024) // 种子节点地址map
 	comingConns = make(map[*net.TCPConn]bool, 1024) // 自身看作穿透服时，新连接map
-	peers = make(map[*net.TCPConn]*connStatus_T, 1024) // 自身看作客户端时，新连接map
+	peers = make(map[*net.TCPConn]*ConnStatus_T, 1024) // 自身看作客户端时，新连接map
 	hashNonceFirst *hashNonce_T
 	hashNonceCurrent *hashNonce_T
 	MaxConnection = 16
@@ -108,14 +108,15 @@ func init() {
 	DisconnectNotices = make([]*DisconnectNotice_T, 0, 8)
 }
 
-func GetPeers() map[*net.TCPConn]*connStatus_T {
+func GetPeers() map[*net.TCPConn]*ConnStatus_T {
 	return peers
 }
 
 func AddPeer(conn *net.TCPConn) {
-	connStatus := connStatus_T{
-		c: make(chan int),
-		b: true,
+	connStatus := ConnStatus_T{
+		C: make(chan int),
+		
+		B: true,
 	}
 	peers[conn] = &connStatus
 }
@@ -248,7 +249,7 @@ func handleTCPConnection(conn *net.TCPConn, event *Event_T, processLogic func([]
 			if ok == false {
 				continue
 			}
-			peers[conn].c <- totalSecondCount
+			peers[conn].C <- totalSecondCount
 			totalSecondCount = 0
 		}
 	}()
@@ -256,10 +257,11 @@ func handleTCPConnection(conn *net.TCPConn, event *Event_T, processLogic func([]
 	for {
 		buffer := make([]byte, 1024)
 		n, err := conn.Read(buffer)
+		log.Println(n,err)
 		if err != nil {
 			log.Println(err)
 			delete(peers, conn)
-			fmt.Println(len(DisconnectNotices))
+			log.Println(len(DisconnectNotices))
 			event.OnDisconnect(DisconnectNotices)
 			break
 		}
@@ -520,7 +522,7 @@ func tcpHandle(command uint8, headForHash, data []byte, hashNonce *hashNonce_T, 
 		}
 
 		fmt.Println("节点连接成功")
-		peers[conn].b = true
+		peers[conn].B = true
 
 	//	go handleTCPConnection(conn, event, processLogic)
 
@@ -859,6 +861,8 @@ func GetComingConns() map[*net.TCPConn]bool {
 
 func DefaultDisconnectEvent(notices []*DisconnectNotice_T) {
 	for _, n := range notices {
-		n.NoticeCh <- n.Param
+		go func(n * DisconnectNotice_T) {
+			n.NoticeCh <- n.Param
+		}(n)
 	}
 }
