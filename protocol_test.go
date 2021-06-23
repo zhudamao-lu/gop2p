@@ -33,6 +33,18 @@ func init() {
 		return nil
 	}
 
+	event.OnResponse = func(command uint8, innerArgs ...interface{}) error {
+		fmt.Println(event.Args[command])
+		fmt.Println(innerArgs[0].(*net.TCPConn))
+		AddPeer(innerArgs[0].(*net.TCPConn)) // 如果穿透服也是一个节点，则可以执行此
+	//	event.SeedConn.Close() // 如果穿透服不是一个节点，则关闭
+	//	event.SeedConn的赋值 在gop2p 内部完成
+
+		fmt.Println("event.OnResponse")
+
+		return nil
+	}
+
 	event.OnNotice = func(command uint8, innerArgs ...interface{}) error {
 		fmt.Println(event.Args[command])
 		AddPeer(innerArgs[0].(*net.TCPConn)) // 如果穿透服也是一个节点，则可以执行此
@@ -63,6 +75,11 @@ func init() {
 		// event.SeedConn的赋值 在gop2p 内部完成
 		return nil
 	}
+
+	event.OnDisconnect = func(peer *net.TCPConn) {
+		fmt.Println("OnDisconnect")
+		fmt.Println(peer.RemoteAddr().String())
+	}
 }
 
 func TestMain(t *testing.T) {
@@ -87,7 +104,7 @@ func TestMain(t *testing.T) {
 
 func syncron() error {
 	for peer, _ := range GetPeers() {
-		err := Send(peer, 5, []byte("aaa"))
+		err := Send(peer, 5, []byte("aaa"), event.OnDisconnect)
 		if err != nil {
 			return err
 		}
@@ -112,12 +129,12 @@ func processLogic(head, body []byte, conn *net.TCPConn) {
 		log.Println("api 1:", string(data))
 	}
 
-	Forward(append(head, body...)) // forward
+	Forward(append(head, body...), event.OnDisconnect) // forward
 }
 
 func (c *RPCCommandServer)Api(args interface{}, reply *string) error {
 	log.Println("conns:", GetPeers())
-	Broadcast(5, []byte("testInfo"))
+	Broadcast(5, []byte("testInfo"), event.OnDisconnect)
 
 	return nil
 }
