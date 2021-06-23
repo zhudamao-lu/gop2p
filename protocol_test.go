@@ -107,10 +107,11 @@ func syncron() error {
 	return nil
 }
 
-func processLogic(head, body []byte, conn *net.TCPConn) error {
+func processLogic(head, body []byte, conn *net.TCPConn) {
 	api, err := GetApiFromBody(body)
 	if err != nil {
-		return err
+		fmt.Println(err)
+		return
 	}
 
 	data := GetDataFromBody(body)
@@ -123,8 +124,6 @@ func processLogic(head, body []byte, conn *net.TCPConn) error {
 	}
 
 	Forward(append(head, body...)) // forward
-
-	return nil
 }
 
 func (c *RPCCommandServer)Api(args interface{}, reply *string) error {
