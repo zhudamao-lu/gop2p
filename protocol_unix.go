@@ -701,7 +701,7 @@ func tcpHandle(command uint8, headForHash, data []byte, hashNonce *hashNonce_T, 
 	如果发送时有任何网络错误将返回一个 error 类型的值
 	否则返回 nil
 */
-func Send(conn *net.TCPConn, api int32, body []byte, onDisconnect func(peer *net.TCPConn)) error {
+func Send(conn *net.TCPConn, api int32, body []byte) error {
 	data := append(int32ToBytes(api), body...)
 
 	timestamp := time.Now().UnixNano() // timestamp
@@ -715,7 +715,7 @@ func Send(conn *net.TCPConn, api int32, body []byte, onDisconnect func(peer *net
 		return err
 	}
 
-	err = send(conn, timestamp, random.Bytes(), data, onDisconnect)
+	err = send(conn, timestamp, random.Bytes(), data)
 	if err != nil {
 		return err
 	}
@@ -730,7 +730,7 @@ func Send(conn *net.TCPConn, api int32, body []byte, onDisconnect func(peer *net
 	如果某一次个发送出现了错误，他将打印这个错误
 	但是不会退出，然后继续向之后的连接发送消息
 */
-func Broadcast(api int32, body []byte, onDisconnect func(peer *net.TCPConn)) {
+func Broadcast(api int32, body []byte) {
 	var err error
 	data := append(int32ToBytes(api), body...)
 
@@ -747,7 +747,7 @@ func Broadcast(api int32, body []byte, onDisconnect func(peer *net.TCPConn)) {
 	}
 
 	for conn, _ := range peers {
-		err = send(conn, timestamp, random.Bytes(), data, onDisconnect)
+		err = send(conn, timestamp, random.Bytes(), data)
 		if err != nil {
 			log.Println(err)
 			continue
@@ -755,7 +755,7 @@ func Broadcast(api int32, body []byte, onDisconnect func(peer *net.TCPConn)) {
 	}
 }
 
-func send(conn *net.TCPConn, timestamp int64, random, data []byte, onDisconnect func(peer *net.TCPConn)) error {
+func send(conn *net.TCPConn, timestamp int64, random, data []byte) error {
 	sendData := []byte(PACKET_IDENTIFY)
 	sendData = append(sendData, byte(ACTION_CONNECTION_LOGIC))
 	sendData = append(sendData, intToBytes(len(data))...)
@@ -767,7 +767,7 @@ func send(conn *net.TCPConn, timestamp int64, random, data []byte, onDisconnect 
 	_, err := conn.Write(sendData)
 	if err != nil {
 		delete(peers, conn)
-		onDisconnect(conn)
+		Event.OnDisconnect(conn)
 		return err
 	}
 
@@ -778,12 +778,12 @@ func send(conn *net.TCPConn, timestamp int64, random, data []byte, onDisconnect 
 	Forward the incoming packet by broadcasting.
 	param data is the packet content
 */
-func Forward(data []byte, onDisconnect func(peer *net.TCPConn)) {
+func Forward(data []byte) {
 	for conn, _ := range peers {
 		_, err := conn.Write(data)
 		if err != nil {
 			delete(peers, conn)
-			onDisconnect(conn)
+			Event.OnDisconnect(conn)
 			log.Println(err)
 			continue
 		}

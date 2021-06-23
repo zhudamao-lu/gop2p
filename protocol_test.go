@@ -106,7 +106,7 @@ func TestMain(t *testing.T) {
 
 func syncron() error {
 	for peer, _ := range GetPeers() {
-		err := Send(peer, 5, []byte("aaa"), event.OnDisconnect)
+		err := Send(peer, 5, []byte("aaa"))
 		if err != nil {
 			return err
 		}
@@ -131,12 +131,12 @@ func processLogic(head, body []byte, conn *net.TCPConn) {
 		log.Println("api 1:", string(data))
 	}
 
-	Forward(append(head, body...), event.OnDisconnect) // forward
+	Forward(append(head, body...)) // forward
 }
 
 func (c *RPCCommandServer)Api(args interface{}, reply *string) error {
 	log.Println("conns:", GetPeers())
-	Broadcast(5, []byte("testInfo"), event.OnDisconnect)
+	Broadcast(5, []byte("testInfo"))
 
 	return nil
 }
