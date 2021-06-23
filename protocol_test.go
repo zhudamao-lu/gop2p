@@ -80,6 +80,8 @@ func init() {
 		fmt.Println("OnDisconnect")
 		fmt.Println(peer.RemoteAddr().String())
 	}
+
+	ProcessLogic = processLogic
 }
 
 func TestMain(t *testing.T) {
@@ -96,7 +98,7 @@ func TestMain(t *testing.T) {
 		}
 	}()
 
-	err := StartTCPTurnServer(seeds, event, processLogic)
+	err := StartTCPTurnServer(seeds)
 	if err != nil {
 		t.Fatal(err)
 	}
