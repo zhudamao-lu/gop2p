@@ -148,6 +148,7 @@ func connectSeed(lAddr *net.TCPAddr, seedAddrsStr []string, event *Event_T, proc
 		go handleTCPConnection(connc.(*net.TCPConn), event, processLogic)
 		_, err = connc.Write(data)
 		if err != nil {
+			delete(peers, conn)
 			log.Println(err)
 			continue
 		}
@@ -338,6 +339,7 @@ func tcpHandle(command uint8, headForHash, data []byte, hashNonce *hashNonce_T, 
 			sendData = append(sendData, body...)
 			_, err := k.Write(sendData)
 			if err != nil {
+				delete(peers, conn)
 				log.Println(err)
 				continue
 			}
@@ -351,6 +353,7 @@ func tcpHandle(command uint8, headForHash, data []byte, hashNonce *hashNonce_T, 
 		sendData = append(sendData, make([]byte, 32, 32)...) // hash
 		_, err = conn.Write(sendData)
 		if err != nil {
+			delete(peers, conn)
 			log.Println(err)
 		}
 
@@ -417,6 +420,7 @@ func tcpHandle(command uint8, headForHash, data []byte, hashNonce *hashNonce_T, 
 		sendData = append(sendData, body...)
 		_, err = connc.Write(sendData)
 		if err != nil {
+			delete(peers, conn)
 			log.Println(err)
 			break
 		}
@@ -433,6 +437,7 @@ func tcpHandle(command uint8, headForHash, data []byte, hashNonce *hashNonce_T, 
 		sendData = append(sendData, body...)
 		_, err = conn.Write(sendData)
 		if err != nil {
+			delete(peers, conn)
 			log.Println(err)
 			break
 		}
@@ -538,6 +543,7 @@ func tcpHandle(command uint8, headForHash, data []byte, hashNonce *hashNonce_T, 
 		sendData = append(sendData, body...)
 		_, err = connStB.Write(sendData)
 		if err != nil {
+			delete(peers, conn)
 			log.Println(err)
 			break
 		}
@@ -586,6 +592,7 @@ func tcpHandle(command uint8, headForHash, data []byte, hashNonce *hashNonce_T, 
 				fmt.Println("B has A:", k.LocalAddr(), k.RemoteAddr())
 				_, err := k.Write(sendData)
 				if err != nil {
+					delete(peers, conn)
 					log.Println(err)
 					break
 				}
@@ -757,6 +764,7 @@ func send(conn *net.TCPConn, timestamp int64, random, data []byte) error {
 	sendData = append(sendData, data...)
 	_, err := conn.Write(sendData)
 	if err != nil {
+		delete(peers, conn)
 		return err
 	}
 
@@ -771,6 +779,7 @@ func Forward(data []byte) {
 	for conn, _ := range peers {
 		_, err := conn.Write(data)
 		if err != nil {
+			delete(peers, conn)
 			log.Println(err)
 			continue
 		}
