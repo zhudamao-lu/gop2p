@@ -184,7 +184,7 @@ func StartTCPTurnServer(seedAddrsStr []string, event *Event_T, processLogic func
 	var listenConfig net.ListenConfig
 	listenConfig = net.ListenConfig{Control: controlSockReusePortUnix}
 
-	ln, err := listenConfig.Listen(context.Background(), "tcp", "")
+	ln, err := listenConfig.Listen(context.Background(), "tcp", ":8082")
 	if err != nil {
 		return err
 	}
