@@ -148,7 +148,8 @@ func connectSeed(lAddr *net.TCPAddr, seedAddrsStr []string, event *Event_T, proc
 		go handleTCPConnection(connc.(*net.TCPConn), event, processLogic)
 		_, err = connc.Write(data)
 		if err != nil {
-			delete(peers, conn)
+			delete(peers, connc.(*net.TCPConn))
+			event.OnDisconnect(connc.(*net.TCPConn))
 			log.Println(err)
 			continue
 		}
@@ -219,9 +220,9 @@ func handleTCPConnection(conn *net.TCPConn, event *Event_T, processLogic func([]
 		buffer := make([]byte, 1024)
 		n, err := conn.Read(buffer)
 		if err != nil {
-			log.Println(err)
 			delete(peers, conn)
 			event.OnDisconnect(conn)
+			log.Println(err)
 			break
 		}
 
@@ -339,7 +340,8 @@ func tcpHandle(command uint8, headForHash, data []byte, hashNonce *hashNonce_T, 
 			sendData = append(sendData, body...)
 			_, err := k.Write(sendData)
 			if err != nil {
-				delete(peers, conn)
+				delete(peers, k)
+				event.OnDisconnect(k)
 				log.Println(err)
 				continue
 			}
@@ -354,6 +356,7 @@ func tcpHandle(command uint8, headForHash, data []byte, hashNonce *hashNonce_T, 
 		_, err = conn.Write(sendData)
 		if err != nil {
 			delete(peers, conn)
+			event.OnDisconnect(conn)
 			log.Println(err)
 		}
 
@@ -420,7 +423,8 @@ func tcpHandle(command uint8, headForHash, data []byte, hashNonce *hashNonce_T, 
 		sendData = append(sendData, body...)
 		_, err = connc.Write(sendData)
 		if err != nil {
-			delete(peers, conn)
+			delete(peers, connc.(*net.TCPConn))
+			event.OnDisconnect(connc.(*net.TCPConn))
 			log.Println(err)
 			break
 		}
@@ -438,6 +442,7 @@ func tcpHandle(command uint8, headForHash, data []byte, hashNonce *hashNonce_T, 
 		_, err = conn.Write(sendData)
 		if err != nil {
 			delete(peers, conn)
+			event.OnDisconnect(conn)
 			log.Println(err)
 			break
 		}
@@ -543,7 +548,8 @@ func tcpHandle(command uint8, headForHash, data []byte, hashNonce *hashNonce_T, 
 		sendData = append(sendData, body...)
 		_, err = connStB.Write(sendData)
 		if err != nil {
-			delete(peers, conn)
+			delete(peers, connStB)
+			event.OnDisconnect(connStB)
 			log.Println(err)
 			break
 		}
@@ -592,7 +598,8 @@ func tcpHandle(command uint8, headForHash, data []byte, hashNonce *hashNonce_T, 
 				fmt.Println("B has A:", k.LocalAddr(), k.RemoteAddr())
 				_, err := k.Write(sendData)
 				if err != nil {
-					delete(peers, conn)
+					delete(peers, k)
+					event.OnDisconnect(k)
 					log.Println(err)
 					break
 				}
@@ -765,6 +772,7 @@ func send(conn *net.TCPConn, timestamp int64, random, data []byte) error {
 	_, err := conn.Write(sendData)
 	if err != nil {
 		delete(peers, conn)
+		event.OnDisconnect(conn)
 		return err
 	}
 
@@ -780,6 +788,7 @@ func Forward(data []byte) {
 		_, err := conn.Write(data)
 		if err != nil {
 			delete(peers, conn)
+			event.OnDisconnect(conn)
 			log.Println(err)
 			continue
 		}
