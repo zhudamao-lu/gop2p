@@ -6,7 +6,7 @@ import (
 	"net/rpc"
 	"net/rpc/jsonrpc"
 	"encoding/hex"
-//	"time"
+	"time"
 	"fmt"
 	"log"
 )
@@ -16,6 +16,7 @@ var event *Event_T
 type RPCCommandServer struct {}
 
 func init() {
+	log.SetFlags(log.Llongfile | log.LstdFlags)
 	event = &Event_T{}
 	event.Args[0] = [2]string{"on request", "hi hi hi"}
 	event.Args[1] = "on Notice"
@@ -97,6 +98,16 @@ func TestMain(t *testing.T) {
 			t.Fatal(err)
 		}
 	}()
+	go func (){
+		for {
+			for _,v := range peers{
+				tmpV := <- v.C
+				log.Println("read chan value: ", tmpV)
+			}
+			time.Sleep(1 * time.Second)
+		}
+	}()
+
 
 	err := StartTCPTurnServer(seeds)
 	if err != nil {
@@ -136,7 +147,8 @@ func processLogic(head, body []byte, conn *net.TCPConn) {
 
 func (c *RPCCommandServer)Api(args interface{}, reply *string) error {
 	log.Println("conns:", GetPeers())
-	Broadcast(5, []byte("testInfo"))
+	// Broadcast(5, []byte("testInfo"))
+	Broadcast(5, make([]byte,1024000000))
 
 	return nil
 }
