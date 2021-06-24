@@ -34,6 +34,18 @@ func init() {
 		return nil
 	}
 
+	event.OnResponse = func(command uint8, innerArgs ...interface{}) error {
+		fmt.Println(event.Args[command])
+		fmt.Println(innerArgs[0].(*net.TCPConn))
+		AddPeer(innerArgs[0].(*net.TCPConn)) // 如果穿透服也是一个节点，则可以执行此
+	//	event.SeedConn.Close() // 如果穿透服不是一个节点，则关闭
+	//	event.SeedConn的赋值 在gop2p 内部完成
+
+		fmt.Println("event.OnResponse")
+
+		return nil
+	}
+
 	event.OnNotice = func(command uint8, innerArgs ...interface{}) error {
 		fmt.Println(event.Args[command])
 		AddPeer(innerArgs[0].(*net.TCPConn)) // 如果穿透服也是一个节点，则可以执行此
@@ -64,6 +76,13 @@ func init() {
 		// event.SeedConn的赋值 在gop2p 内部完成
 		return nil
 	}
+
+	event.OnDisconnect = func(peer *net.TCPConn) {
+		fmt.Println("OnDisconnect")
+		fmt.Println(peer.RemoteAddr().String())
+	}
+
+	ProcessLogic = processLogic
 }
 
 func TestMain(t *testing.T) {
@@ -90,7 +109,7 @@ func TestMain(t *testing.T) {
 	}()
 
 
-	err := StartTCPTurnServer(seeds, event, processLogic)
+	err := StartTCPTurnServer(seeds)
 	if err != nil {
 		t.Fatal(err)
 	}

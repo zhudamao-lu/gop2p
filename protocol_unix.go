@@ -97,6 +97,16 @@ type Event_T struct {
 	OnDisconnect func(peer *net.TCPConn)
 }
 
+/*
+	Event 默认事件全局变量
+*/
+var Event *Event_T
+
+/*
+	ProcessLogic 是在穿透成功建立点对点连接
+*/
+var ProcessLogic func([]byte, []byte, *net.TCPConn)
+
 func init() {}
 
 func GetPeers() map[*net.TCPConn]*ConnStatus_T {
@@ -124,8 +134,7 @@ func GetSeedAddrs() map[*net.TCPAddr]bool {
 /*
 	连接种子节点
 */
-
-func connectSeed(lAddr *net.TCPAddr, seedAddrsStr []string, event *Event_T, processLogic func([]byte, []byte, *net.TCPConn)) error {
+func connectSeed(lAddr *net.TCPAddr, seedAddrsStr []string) error {
 	for _, v := range seedAddrsStr {
 		addr, err := net.ResolveTCPAddr("tcp", v)
 		if err != nil {
@@ -155,9 +164,10 @@ func connectSeed(lAddr *net.TCPAddr, seedAddrsStr []string, event *Event_T, proc
 		data = append(data, make([]byte, 32, 32)...) // hash
 		data = append(data, body...)
 
-		go handleTCPConnection(connc.(*net.TCPConn), event, processLogic)
+		go handleTCPConnection(connc.(*net.TCPConn))
 		_, err = connc.Write(data)
 		if err != nil {
+			Event.OnDisconnect(connc.(*net.TCPConn))
 			log.Println(err)
 			continue
 		}
@@ -175,16 +185,15 @@ func connectSeed(lAddr *net.TCPAddr, seedAddrsStr []string, event *Event_T, proc
 	该 func 会设置端口重用, 在同一端口监听和拨号. 当发生监听、拨号类问题,
 	也会返回一个 error.
 
-	参数 processLogic 接收一个 func, 该 func 是在穿透成功建立点对点连接,
 	并且收到对方节点传来的数据时，根据起第一个参数(int 类型，可看作API号),
 	做出的相应动作. 第一个参数将会是对方传来数据的body中前4个字节.
 	该func 由用户实现, 并传入 StartTCPTurnServer.
 */
-func StartTCPTurnServer(seedAddrsStr []string, event *Event_T, processLogic func([]byte, []byte, *net.TCPConn)) error {
+func StartTCPTurnServer(seedAddrsStr []string) error {
 	var listenConfig net.ListenConfig
 	listenConfig = net.ListenConfig{Control: controlSockReusePortUnix}
 
-	ln, err := listenConfig.Listen(context.Background(), "tcp", ":8082")
+	ln, err := listenConfig.Listen(context.Background(), "tcp", ":11111")
 	if err != nil {
 		return err
 	}
@@ -196,16 +205,14 @@ func StartTCPTurnServer(seedAddrsStr []string, event *Event_T, processLogic func
 	}
 	log.Println(lAddr)
 
-//	connectSeed(lAddr, seedAddrsStr, eventsArrayFunc, processLogic)
-	connectSeed(lAddr, seedAddrsStr, event, processLogic)
+	connectSeed(lAddr, seedAddrsStr)
 
-//	listenAccept(ln, eventsArrayFunc, processLogic)
-	listenAccept(ln, event, processLogic)
+	listenAccept(ln)
 
 	return nil
 }
 
-func handleTCPConnection(conn *net.TCPConn, event *Event_T, processLogic func([]byte, []byte, *net.TCPConn)) {
+func handleTCPConnection(conn *net.TCPConn) {
 	defer conn.Close()
 
 	data := make([]byte, 0, 4096)
@@ -213,7 +220,7 @@ func handleTCPConnection(conn *net.TCPConn, event *Event_T, processLogic func([]
 	defer func() {
 		err := recover()
 		if err != nil {
-			fmt.Println(err)
+			log.Println(err)
 			buf := make([]byte, 2048)
 
 			n := runtime.Stack(buf, false)
@@ -247,9 +254,10 @@ func handleTCPConnection(conn *net.TCPConn, event *Event_T, processLogic func([]
 		buffer := make([]byte, 1024)
 		n, err := conn.Read(buffer)
 		if err != nil {
-			log.Println(err)
+			delete(comingConns, conn)
 			delete(peers, conn)
-			event.OnDisconnect(conn)
+			Event.OnDisconnect(conn)
+			log.Println(err)
 			break
 		}
 		totalSecondCount += n
@@ -272,7 +280,7 @@ func handleTCPConnection(conn *net.TCPConn, event *Event_T, processLogic func([]
 			if bodyEnd <= len(data) {
 				body := make([]byte, bodyLength, bodyLength)
 				copy(body, data[PACKET_HEAD_LEN : bodyEnd])
-				tcpHandle(command, headForHash, body, hashNonce, conn, event, processLogic)
+				tcpHandle(command, headForHash, body, hashNonce, conn)
 				data = data[bodyEnd :]
 				continue
 			}
@@ -281,7 +289,7 @@ func handleTCPConnection(conn *net.TCPConn, event *Event_T, processLogic func([]
 	}
 }
 
-func listenAccept(ln net.Listener, event *Event_T, processLogic func([]byte, []byte, *net.TCPConn)) {
+func listenAccept(ln net.Listener) {
 	defer ln.Close()
 	for {
 		conn, err := ln.Accept()
@@ -291,7 +299,7 @@ func listenAccept(ln net.Listener, event *Event_T, processLogic func([]byte, []b
 		}
 		log.Println(conn.RemoteAddr())
 
-		go handleTCPConnection(conn.(*net.TCPConn), event, processLogic)
+		go handleTCPConnection(conn.(*net.TCPConn))
 	}
 }
 
@@ -324,7 +332,7 @@ func decodeData(data []byte) (uint8, []byte, int, *hashNonce_T, error) {
 	return command, nil, bodyLength, hashNonce, nil
 }
 
-func tcpHandle(command uint8, headForHash, data []byte, hashNonce *hashNonce_T, conn *net.TCPConn, event *Event_T, processLogic func([]byte, []byte, *net.TCPConn)) {
+func tcpHandle(command uint8, headForHash, data []byte, hashNonce *hashNonce_T, conn *net.TCPConn) {
 //	defer handlePanic("tcpHandle")
 
 	switch command {
@@ -367,6 +375,7 @@ func tcpHandle(command uint8, headForHash, data []byte, hashNonce *hashNonce_T, 
 			sendData = append(sendData, body...)
 			_, err := k.Write(sendData)
 			if err != nil {
+				Event.OnDisconnect(k)
 				log.Println(err)
 				continue
 			}
@@ -380,13 +389,14 @@ func tcpHandle(command uint8, headForHash, data []byte, hashNonce *hashNonce_T, 
 		sendData = append(sendData, make([]byte, 32, 32)...) // hash
 		_, err = conn.Write(sendData)
 		if err != nil {
+			Event.OnDisconnect(conn)
 			log.Println(err)
 		}
 
 		comingConns[conn] = true
 		log.Println(string(data))
 
-		err = event.OnRequest(command, conn)
+		err = Event.OnRequest(command, conn)
 		if err != nil {
 			log.Println(err)
 			break
@@ -399,7 +409,7 @@ func tcpHandle(command uint8, headForHash, data []byte, hashNonce *hashNonce_T, 
 	*/
 	case ACTION_CONNECTION_RESPONSE:
 		fmt.Println("case 1:")
-		err := event.OnResponse(command, conn)
+		err := Event.OnResponse(command, conn)
 		if err != nil {
 			log.Println(err)
 			break
@@ -434,7 +444,7 @@ func tcpHandle(command uint8, headForHash, data []byte, hashNonce *hashNonce_T, 
 			log.Println(err)
 		}
 
-		go handleTCPConnection(connc.(*net.TCPConn), event, processLogic)
+		go handleTCPConnection(connc.(*net.TCPConn))
 
 		body := []byte("turn...")
 		sendData := []byte(PACKET_IDENTIFY)
@@ -446,6 +456,7 @@ func tcpHandle(command uint8, headForHash, data []byte, hashNonce *hashNonce_T, 
 		sendData = append(sendData, body...)
 		_, err = connc.Write(sendData)
 		if err != nil {
+			Event.OnDisconnect(connc.(*net.TCPConn))
 			log.Println(err)
 			break
 		}
@@ -462,11 +473,12 @@ func tcpHandle(command uint8, headForHash, data []byte, hashNonce *hashNonce_T, 
 		sendData = append(sendData, body...)
 		_, err = conn.Write(sendData)
 		if err != nil {
+			Event.OnDisconnect(conn)
 			log.Println(err)
 			break
 		}
 
-		err = event.OnNotice(command, conn)
+		err = Event.OnNotice(command, conn)
 		if err != nil {
 			log.Println(err)
 			break
@@ -514,23 +526,11 @@ func tcpHandle(command uint8, headForHash, data []byte, hashNonce *hashNonce_T, 
 			log.Println("peers this conn has delete")
 		}
 
-	//	go handleTCPConnection(conn, event, processLogic)
-
-		err := event.OnOK(command, conn)
+		err := Event.OnOK(command, conn)
 		if err != nil {
 			log.Println(err)
 			break
 		}
-
-	/*
-		if EventsArrayFunc[command] == nil { break }
-		err := EventsArrayFunc[command]()
-		if err != nil {
-			log.Println(err)
-			break
-		}
-	*/
-
 
 	/*
 		穿透服务收到打洞回馈信息
@@ -572,11 +572,12 @@ func tcpHandle(command uint8, headForHash, data []byte, hashNonce *hashNonce_T, 
 		sendData = append(sendData, body...)
 		_, err = connStB.Write(sendData)
 		if err != nil {
+			Event.OnDisconnect(connStB)
 			log.Println(err)
 			break
 		}
 
-		err = event.OnTurning(command, conn)
+		err = Event.OnTurning(command, conn)
 		if err != nil {
 			log.Println(err)
 			break
@@ -620,6 +621,7 @@ func tcpHandle(command uint8, headForHash, data []byte, hashNonce *hashNonce_T, 
 				fmt.Println("B has A:", k.LocalAddr(), k.RemoteAddr())
 				_, err := k.Write(sendData)
 				if err != nil {
+					Event.OnDisconnect(k)
 					log.Println(err)
 					break
 				}
@@ -628,7 +630,7 @@ func tcpHandle(command uint8, headForHash, data []byte, hashNonce *hashNonce_T, 
 			}
 		}
 
-		err := event.OnNotice2(command, conn)
+		err := Event.OnNotice2(command, conn)
 		if err != nil {
 			log.Println(err)
 			break
@@ -706,7 +708,7 @@ func tcpHandle(command uint8, headForHash, data []byte, hashNonce *hashNonce_T, 
 		go hashNonce.countDown()
 		hashNonceMutex.Unlock()
 
-		go processLogic(head, data, conn)
+		go ProcessLogic(head, data, conn)
 
 	/*
 		用于测试TCP
@@ -791,6 +793,8 @@ func send(conn *net.TCPConn, timestamp int64, random, data []byte) error {
 	sendData = append(sendData, data...)
 	_, err := conn.Write(sendData)
 	if err != nil {
+		Event.OnDisconnect(conn)
+		log.Println(err)
 		return err
 	}
 
@@ -805,6 +809,7 @@ func Forward(data []byte) {
 	for conn, _ := range peers {
 		_, err := conn.Write(data)
 		if err != nil {
+			Event.OnDisconnect(conn)
 			log.Println(err)
 			continue
 		}
