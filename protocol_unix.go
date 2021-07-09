@@ -439,9 +439,15 @@ func tcpHandle(command uint8, headForHash, data []byte, hashNonce *hashNonce_T, 
 		}
 
 		d := net.Dialer {Control: controlSockReusePortUnix, LocalAddr: lAddr}
+
 		connc, err := d.Dial(rAddrC.Network(), rAddrC.String())
 		if err != nil {
 			log.Println(err)
+		}
+
+		if connc == nil {
+			log.Println("connc is nil")
+			return
 		}
 
 		go handleTCPConnection(connc.(*net.TCPConn))
