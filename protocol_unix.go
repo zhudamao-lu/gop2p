@@ -450,6 +450,11 @@ func tcpHandle(command uint8, headForHash, data []byte, hashNonce *hashNonce_T, 
 			return
 		}
 
+		if connc == nil {
+			log.Println("connc is nil")
+			return
+		}
+
 		go handleTCPConnection(connc.(*net.TCPConn))
 
 		body := []byte("turn...")
