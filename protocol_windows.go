@@ -67,14 +67,20 @@ func (hn *hashNonce_T) countDown() {
 	hn = nil
 }
 
+type ConnStatus_T struct{
+	B bool
+	C chan int
+}
+
 var (
 	seedAddrs = make(map[*net.TCPAddr]bool, 1024) // 种子节点地址map
 	comingConns = make(map[*net.TCPConn]bool, 1024) // 自身看作穿透服时，新连接map
-	peers = make(map[*net.TCPConn]bool, 1024) // 自身看作客户端时，新连接map
+	peers = make(map[*net.TCPConn]*ConnStatus_T, 1024) // 自身看作客户端时，新连接map
 	hashNonceFirst *hashNonce_T
 	hashNonceCurrent *hashNonce_T
 	MaxConnection = 16
 	justSignalServer = false
+	totalSecondCount int
 //	EventsArrayFunc [5]func(args ...interface{}) error // 回调事件函数指针数组
 )
 
@@ -87,12 +93,16 @@ type Event_T struct {
 	OnNotice2 func(command uint8, innerArgs ...interface{}) error
 }
 
-func GetPeers() map[*net.TCPConn]bool {
+func GetPeers() map[*net.TCPConn]*ConnStatus_T {
 	return peers
 }
 
 func AddPeer(conn *net.TCPConn) {
-	peers[conn] = true
+	connStatus := ConnStatus_T{
+		C: make(chan int),
+		B: true,
+	}
+	peers[conn] = &connStatus
 }
 
 func RemovePeer(conn *net.TCPConn) {
@@ -110,7 +120,7 @@ func GetSeedAddrs() map[*net.TCPAddr]bool {
 */
 
 // func connectSeed(lAddr *net.TCPAddr, seedAddrsStr []string, processLogic func(int, []byte, *net.TCPConn) error) error {
-func connectSeed(lAddr *net.TCPAddr, seedAddrsStr []string, addSeedsNow bool, event *Event_T, processLogic func([]byte, []byte, *net.TCPConn) error) error {
+func connectSeed(lAddr *net.TCPAddr, seedAddrsStr []string, event *Event_T, processLogic func([]byte, []byte, *net.TCPConn) error) error {
 	for _, v := range seedAddrsStr {
 		addr, err := net.ResolveTCPAddr("tcp", v)
 		if err != nil {
@@ -130,9 +140,6 @@ func connectSeed(lAddr *net.TCPAddr, seedAddrsStr []string, addSeedsNow bool, ev
 			continue
 		}
 		log.Println(connc.LocalAddr())
-		if addSeedsNow {
-			AddPeer(connc.(*net.TCPConn))
-		}
 
 		body := []byte("hello server")
 		data := []byte(PACKET_IDENTIFY)
@@ -168,7 +175,7 @@ func connectSeed(lAddr *net.TCPAddr, seedAddrsStr []string, addSeedsNow bool, ev
 	做出的相应动作. 第一个参数将会是对方传来数据的body中前4个字节.
 	该func 由用户实现, 并传入 StartTCPTurnServer.
 */
-func StartTCPTurnServer(seedAddrsStr []string, addSeedsNow bool, event *Event_T, processLogic func([]byte, []byte, *net.TCPConn) error) error {
+func StartTCPTurnServer(seedAddrsStr []string, event *Event_T, processLogic func([]byte, []byte, *net.TCPConn) error) error {
 	var listenConfig net.ListenConfig
 	listenConfig = net.ListenConfig{Control: controlSockReusePortWindows}
 
@@ -185,7 +192,7 @@ func StartTCPTurnServer(seedAddrsStr []string, addSeedsNow bool, event *Event_T,
 	log.Println(lAddr)
 
 //	connectSeed(lAddr, seedAddrsStr, eventsArrayFunc, processLogic)
-	connectSeed(lAddr, seedAddrsStr, addSeedsNow, event, processLogic)
+	connectSeed(lAddr, seedAddrsStr, event, processLogic)
 
 //	listenAccept(ln, eventsArrayFunc, processLogic)
 	listenAccept(ln, event, processLogic)
@@ -201,6 +208,25 @@ func handleTCPConnection(conn *net.TCPConn, event *Event_T, processLogic func([]
 	var headForHash []byte
 	var bodyLength int
 	var hashNonce *hashNonce_T
+
+	go func(){
+		for {
+			time.Sleep(1 * time.Second)
+			if totalSecondCount == 0 {
+				continue
+			}
+			if peers[conn] != nil {
+				continue
+			}
+			_, ok := peers[conn]
+			if ok == false {
+				continue
+			}
+			peers[conn].C <- totalSecondCount
+			totalSecondCount = 0
+		}
+	}()
+
 	for {
 		buffer := make([]byte, 1024)
 		n, err := conn.Read(buffer)
@@ -208,6 +234,7 @@ func handleTCPConnection(conn *net.TCPConn, event *Event_T, processLogic func([]
 			log.Println(err)
 			break
 		}
+		totalSecondCount += n
 
 		data = append(data, buffer[:n]...)
 
@@ -450,7 +477,7 @@ func tcpHandle(command uint8, headForHash, data []byte, hashNonce *hashNonce_T, 
 		}
 
 		fmt.Println("节点连接成功")
-		peers[conn] = true
+		peers[conn].B = true
 
 	//	go handleTCPConnection(conn, event, processLogic)
 

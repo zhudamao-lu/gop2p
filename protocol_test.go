@@ -6,7 +6,7 @@ import (
 	"net/rpc"
 	"net/rpc/jsonrpc"
 	"encoding/hex"
-//	"time"
+	"time"
 	"fmt"
 	"log"
 )
@@ -16,6 +16,7 @@ var event *Event_T
 type RPCCommandServer struct {}
 
 func init() {
+	log.SetFlags(log.Llongfile | log.LstdFlags)
 	event = &Event_T{}
 	event.Args[0] = [2]string{"on request", "hi hi hi"}
 	event.Args[1] = "on Notice"
@@ -30,6 +31,18 @@ func init() {
 		}
 
 		AddPeer(innerArgs[0].(*net.TCPConn)) // 如果穿透服也是一个节点，则可以执行此
+		return nil
+	}
+
+	event.OnResponse = func(command uint8, innerArgs ...interface{}) error {
+		fmt.Println(event.Args[command])
+		fmt.Println(innerArgs[0].(*net.TCPConn))
+		AddPeer(innerArgs[0].(*net.TCPConn)) // 如果穿透服也是一个节点，则可以执行此
+	//	event.SeedConn.Close() // 如果穿透服不是一个节点，则关闭
+	//	event.SeedConn的赋值 在gop2p 内部完成
+
+		fmt.Println("event.OnResponse")
+
 		return nil
 	}
 
@@ -63,6 +76,13 @@ func init() {
 		// event.SeedConn的赋值 在gop2p 内部完成
 		return nil
 	}
+
+	event.OnDisconnect = func(peer *net.TCPConn) {
+		fmt.Println("OnDisconnect")
+		fmt.Println(peer.RemoteAddr().String())
+	}
+
+	ProcessLogic = processLogic
 }
 
 func TestMain(t *testing.T) {
@@ -78,8 +98,18 @@ func TestMain(t *testing.T) {
 			t.Fatal(err)
 		}
 	}()
+	go func (){
+		for {
+			for _,v := range peers{
+				tmpV := <- v.C
+				log.Println("read chan value: ", tmpV)
+			}
+			time.Sleep(1 * time.Second)
+		}
+	}()
 
-	err := StartTCPTurnServer(seeds, event, processLogic)
+
+	err := StartTCPTurnServer(seeds)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -96,10 +126,11 @@ func syncron() error {
 	return nil
 }
 
-func processLogic(head, body []byte, conn *net.TCPConn) error {
+func processLogic(head, body []byte, conn *net.TCPConn) {
 	api, err := GetApiFromBody(body)
 	if err != nil {
-		return err
+		fmt.Println(err)
+		return
 	}
 
 	data := GetDataFromBody(body)
@@ -112,13 +143,12 @@ func processLogic(head, body []byte, conn *net.TCPConn) error {
 	}
 
 	Forward(append(head, body...)) // forward
-
-	return nil
 }
 
 func (c *RPCCommandServer)Api(args interface{}, reply *string) error {
 	log.Println("conns:", GetPeers())
-	Broadcast(5, []byte("testInfo"))
+	// Broadcast(5, []byte("testInfo"))
+	Broadcast(5, make([]byte,1024000000))
 
 	return nil
 }
