@@ -284,10 +284,7 @@ func handleTCPConnection(conn *net.TCPConn) {
 				data = data[bodyEnd :]
 				continue
 			}
-<<<<<<< HEAD
-=======
 
->>>>>>> 821cc80... debug finish
 			break
 		}
 	}
