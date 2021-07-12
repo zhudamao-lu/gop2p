@@ -268,7 +268,7 @@ func handleTCPConnection(conn *net.TCPConn) {
 			continue
 		}
 
-		for len(data) >= PACKET_IDENTIFY_LEN && string(data[:PACKET_IDENTIFY_LEN]) == PACKET_IDENTIFY {
+		for len(data) >= PACKET_HEAD_LEN && string(data[:PACKET_IDENTIFY_LEN]) == PACKET_IDENTIFY {
 			command, headForHash, bodyLength, hashNonce, err = decodeData(data)
 			if err != nil {
 				log.Println(err)
@@ -284,6 +284,10 @@ func handleTCPConnection(conn *net.TCPConn) {
 				data = data[bodyEnd :]
 				continue
 			}
+<<<<<<< HEAD
+=======
+
+>>>>>>> 821cc80... debug finish
 			break
 		}
 	}
