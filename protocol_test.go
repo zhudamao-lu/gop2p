@@ -142,7 +142,7 @@ func processLogic(head, body []byte, conn *net.TCPConn) {
 		log.Println("api 1:", string(data))
 	}
 
-	Forward(append(head, body...)) // forward
+	Forward(append(head, body...), conn) // forward
 }
 
 func (c *RPCCommandServer)Api(args interface{}, reply *string) error {
