@@ -57,15 +57,16 @@ type hashNonce_T struct {
 	next *hashNonce_T
 }
 
+var hashNonceRWMutex = &sync.RWMutex{}
+
 func (hn *hashNonce_T) countDown() {
 	time.Sleep(time.Second * 300)
-	hashNonceMutex := &sync.Mutex{}
-	hashNonceMutex.Lock()
+	hashNonceRWMutex.Lock()
 	hn.prev = hn.next
 	if hn == hashNonceFirst {
 		hashNonceFirst = hashNonceFirst.next
 	}
-	hashNonceMutex.Unlock()
+	hashNonceRWMutex.Unlock()
 	hn = nil
 }
 
@@ -83,7 +84,6 @@ var (
 	MaxConnection = 16
 	justSignalServer = false
 	totalSecondCount int
-//	EventsArrayFunc [5]func(args ...interface{}) error // 回调事件函数指针数组
 )
 
 type Event_T struct {
@@ -666,9 +666,6 @@ func tcpHandle(command uint8, headForHash, data []byte, hashNonce *hashNonce_T, 
 			break
 		}
 
-		hashNonceMutex := &sync.Mutex{}
-
-		hashNonceMutex.Lock()
 		if hashNonce.timestamp + 300000000000 < time.Now().UnixNano() {
 			fmt.Println("expired packet")
 			data = data[:]
@@ -679,6 +676,7 @@ func tcpHandle(command uint8, headForHash, data []byte, hashNonce *hashNonce_T, 
 		copy(hashNonceBytes, append(hashNonce.nonce, hashNonce.hash...))
 		head := append([]byte("--TCPHEADX--"), append([]byte{byte(command)}, append(intToBytes(len(data)), append(int64ToBytes(hashNonce.timestamp), hashNonceBytes...)...)...)...)
 
+		hashNonceRWMutex.Lock()
 		if hashNonceCurrent != nil {
 			current := hashNonceFirst
 			if hex.EncodeToString(current.hash) == hex.EncodeToString(hashNonce.hash) && hex.EncodeToString(current.nonce) == hex.EncodeToString(hashNonce.nonce) {
@@ -716,9 +714,9 @@ func tcpHandle(command uint8, headForHash, data []byte, hashNonce *hashNonce_T, 
 		fmt.Println(hashNonceFirst.timestamp)
 		fmt.Println(hex.EncodeToString(hashNonceFirst.next.hash))
 		*/
+		hashNonceRWMutex.Unlock()
 
 		go hashNonce.countDown()
-		hashNonceMutex.Unlock()
 
 		go ProcessLogic(head, data, conn)
 
