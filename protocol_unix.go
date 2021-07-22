@@ -817,8 +817,12 @@ func send(conn *net.TCPConn, timestamp int64, random, data []byte) error {
 	Forward the incoming packet by broadcasting.
 	param data is the packet content
 */
-func Forward(data []byte) {
+func Forward(data []byte, except *net.TCPConn) {
 	for conn, _ := range peers {
+		if conn == except {
+			continue
+		}
+
 		_, err := conn.Write(data)
 		if err != nil {
 			Event.OnDisconnect(conn)
