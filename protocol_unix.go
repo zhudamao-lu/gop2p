@@ -661,6 +661,7 @@ func tcpHandle(command uint8, headForHash, data []byte, hashNonce *hashNonce_T, 
 			if hex.EncodeToString(current.hash) == hex.EncodeToString(hashNonce.hash) && hex.EncodeToString(current.nonce) == hex.EncodeToString(hashNonce.nonce) {
 				log.Println("duplucated message")
 				data = data[:]
+				hashNonceRWMutex.Unlock()
 				break
 			}
 			current = current.next
@@ -675,6 +676,7 @@ func tcpHandle(command uint8, headForHash, data []byte, hashNonce *hashNonce_T, 
 			if b {
 				log.Println("duplucated message")
 				data = data[:]
+				hashNonceRWMutex.Unlock()
 				break
 			}
 
