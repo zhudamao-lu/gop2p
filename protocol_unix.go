@@ -259,13 +259,7 @@ func handleTCPConnection(conn *net.TCPConn) {
 		buffer := make([]byte, 1024)
 		n, err := conn.Read(buffer)
 		if err != nil {
-			connsSeedsRWMutex.Lock()
-			conn.Close()
-			delete(seedAddrs, conn.RemoteAddr().(*net.TCPAddr))
-			delete(comingConns, conn)
-			delete(peers, conn)
-			conn = nil
-			connsSeedsRWMutex.Unlock()
+			RemovePeer(conn)
 			Event.OnDisconnect(conn)
 			log.Println(err)
 			break
