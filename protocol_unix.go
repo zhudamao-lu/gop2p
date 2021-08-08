@@ -76,14 +76,15 @@ type ConnStatus_T struct{
 }
 
 var (
-	seedAddrs = make(map[*net.TCPAddr]bool, 1024) // 种子节点地址map
-	comingConns = make(map[*net.TCPConn]bool, 1024) // 自身看作穿透服时，新连接map
-	peers = make(map[*net.TCPConn]*ConnStatus_T, 1024) // 自身看作客户端时，新连接map
+	seedAddrs = make(map[*net.TCPAddr]bool, 4) // 种子节点地址map
+	comingConns = make(map[*net.TCPConn]bool, 12) // 自身看作穿透服时，新连接map
+	peers = make(map[*net.TCPConn]*ConnStatus_T, 16) // 自身看作客户端时，新连接map
 	hashNonceFirst *hashNonce_T
 	hashNonceCurrent *hashNonce_T
 	MaxConnection = 16
 	justSignalServer = false
 	totalSecondCount int
+	connsSeedsRWMutex = &sync.RWMutex{}
 )
 
 type Event_T struct {
@@ -122,7 +123,11 @@ func AddPeer(conn *net.TCPConn) {
 }
 
 func RemovePeer(conn *net.TCPConn) {
+	defer connsSeedsRWMutex.Unlock()
+	connsSeedsRWMutex.Lock()
 	conn.Close()
+	delete(seedAddrs, conn.RemoteAddr().(*net.TCPAddr))
+	delete(comingConns, conn)
 	delete(peers, conn)
 	conn = nil
 }
@@ -254,8 +259,13 @@ func handleTCPConnection(conn *net.TCPConn) {
 		buffer := make([]byte, 1024)
 		n, err := conn.Read(buffer)
 		if err != nil {
+			connsSeedsRWMutex.Lock()
+			conn.Close()
+			delete(seedAddrs, conn.RemoteAddr().(*net.TCPAddr))
 			delete(comingConns, conn)
 			delete(peers, conn)
+			conn = nil
+			connsSeedsRWMutex.Unlock()
 			Event.OnDisconnect(conn)
 			log.Println(err)
 			break
