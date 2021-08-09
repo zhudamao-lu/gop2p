@@ -161,6 +161,8 @@ func connectSeed(lAddr *net.TCPAddr, seedAddrsStr []string) error {
 		connc, err := d.Dial(k.Network(), k.String())
 		if err != nil {
 			log.Println(err)
+			delete(seedAddrs, k)
+			fmt.Println(len(seedAddrs))
 			continue
 		}
 		log.Println(connc.LocalAddr())
