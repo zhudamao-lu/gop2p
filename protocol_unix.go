@@ -84,7 +84,7 @@ var (
 	MaxConnection = 16
 	justSignalServer = false
 	totalSecondCount int
-	connsSeedsRWMutex = &sync.RWMutex{}
+	ConnsSeedsRWMutex = &sync.RWMutex{}
 )
 
 type Event_T struct {
@@ -123,10 +123,15 @@ func AddPeer(conn *net.TCPConn) {
 }
 
 func RemovePeer(conn *net.TCPConn) {
-	defer connsSeedsRWMutex.Unlock()
-	connsSeedsRWMutex.Lock()
+	defer ConnsSeedsRWMutex.Unlock()
+	ConnsSeedsRWMutex.Lock()
 	conn.Close()
-	delete(seedAddrs, conn.RemoteAddr().(*net.TCPAddr))
+	for k, v := range seedAddrs {
+		fmt.Println(k, v)
+		if hex.EncodeToString(k.IP) == hex.EncodeToString(conn.RemoteAddr().(*net.TCPAddr).IP) && k.Port == conn.RemoteAddr().(*net.TCPAddr).Port && k.Zone == conn.RemoteAddr().(*net.TCPAddr).Zone {
+			delete(seedAddrs, k)
+		}
+	}
 	delete(comingConns, conn)
 	delete(peers, conn)
 	conn = nil
