@@ -126,8 +126,7 @@ func RemovePeer(conn *net.TCPConn) {
 	defer ConnsSeedsRWMutex.Unlock()
 	ConnsSeedsRWMutex.Lock()
 	conn.Close()
-	for k, v := range seedAddrs {
-		fmt.Println(k, v)
+	for k, _ := range seedAddrs {
 		if hex.EncodeToString(k.IP) == hex.EncodeToString(conn.RemoteAddr().(*net.TCPAddr).IP) && k.Port == conn.RemoteAddr().(*net.TCPAddr).Port && k.Zone == conn.RemoteAddr().(*net.TCPAddr).Zone {
 			delete(seedAddrs, k)
 		}
@@ -161,6 +160,8 @@ func connectSeed(lAddr *net.TCPAddr, seedAddrsStr []string) error {
 		connc, err := d.Dial(k.Network(), k.String())
 		if err != nil {
 			log.Println(err)
+			delete(seedAddrs, k)
+			fmt.Println(len(seedAddrs))
 			continue
 		}
 		log.Println(connc.LocalAddr())
