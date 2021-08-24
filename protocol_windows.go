@@ -143,7 +143,7 @@ func GetSeedAddrs() map[*net.TCPAddr]bool {
 /*
 	连接种子节点
 */
-func connectSeed(lAddr *net.TCPAddr, seedAddrsStr []string) error {
+func connectSeed(lAddr *net.TCPAddr, seedAddrsStr []string, isSync bool) error {
 	for _, v := range seedAddrsStr {
 		addr, err := net.ResolveTCPAddr("tcp", v)
 		if err != nil {
@@ -175,7 +175,7 @@ func connectSeed(lAddr *net.TCPAddr, seedAddrsStr []string) error {
 		data = append(data, make([]byte, 32, 32)...) // hash
 		data = append(data, body...)
 
-		go handleTCPConnection(connc.(*net.TCPConn))
+		go handleTCPConnection(connc.(*net.TCPConn), isSync)
 		_, err = connc.Write(data)
 		if err != nil {
 			Event.OnDisconnect(connc.(*net.TCPConn))
@@ -200,7 +200,7 @@ func connectSeed(lAddr *net.TCPAddr, seedAddrsStr []string) error {
 	做出的相应动作. 第一个参数将会是对方传来数据的body中前4个字节.
 	该func 由用户实现, 并传入 StartTCPTurnServer.
 */
-func StartTCPTurnServer(seedAddrsStr []string) error {
+func StartTCPTurnServer(seedAddrsStr []string, isSync bool) error {
 	var listenConfig net.ListenConfig
 	listenConfig = net.ListenConfig{Control: controlSockReusePortWindows}
 
@@ -216,14 +216,14 @@ func StartTCPTurnServer(seedAddrsStr []string) error {
 	}
 	log.Println(lAddr)
 
-	connectSeed(lAddr, seedAddrsStr)
+	connectSeed(lAddr, seedAddrsStr, isSync)
 
-	listenAccept(ln)
+	listenAccept(ln, isSync)
 
 	return nil
 }
 
-func handleTCPConnection(conn *net.TCPConn) {
+func handleTCPConnection(conn *net.TCPConn, isSync bool) {
 	defer conn.Close()
 
 	data := make([]byte, 0, 4096)
@@ -290,7 +290,7 @@ func handleTCPConnection(conn *net.TCPConn) {
 			if bodyEnd <= len(data) {
 				body := make([]byte, bodyLength, bodyLength)
 				copy(body, data[PACKET_HEAD_LEN : bodyEnd])
-				tcpHandle(command, headForHash, body, hashNonce, conn)
+				tcpHandle(command, headForHash, body, hashNonce, conn, isSync)
 				data = data[bodyEnd :]
 				continue
 			}
@@ -300,7 +300,7 @@ func handleTCPConnection(conn *net.TCPConn) {
 	}
 }
 
-func listenAccept(ln net.Listener) {
+func listenAccept(ln net.Listener, isSync bool) {
 	defer ln.Close()
 	for {
 		conn, err := ln.Accept()
@@ -310,7 +310,7 @@ func listenAccept(ln net.Listener) {
 		}
 		log.Println(conn.RemoteAddr())
 
-		go handleTCPConnection(conn.(*net.TCPConn))
+		go handleTCPConnection(conn.(*net.TCPConn), isSync)
 	}
 }
 
@@ -344,7 +344,7 @@ func decodeData(data []byte) (uint8, []byte, int, *hashNonce_T, error) {
 	return command, nil, bodyLength, hashNonce, nil
 }
 
-func tcpHandle(command uint8, headForHash, data []byte, hashNonce *hashNonce_T, conn *net.TCPConn) {
+func tcpHandle(command uint8, headForHash, data []byte, hashNonce *hashNonce_T, conn *net.TCPConn, isSync bool) {
 //	defer handlePanic("tcpHandle")
 
 	switch command {
@@ -464,7 +464,7 @@ func tcpHandle(command uint8, headForHash, data []byte, hashNonce *hashNonce_T, 
 			return
 		}
 
-		go handleTCPConnection(connc.(*net.TCPConn))
+		go handleTCPConnection(connc.(*net.TCPConn), isSync)
 
 		body := []byte("turn...")
 		sendData := []byte(PACKET_IDENTIFY)
@@ -702,7 +702,11 @@ func tcpHandle(command uint8, headForHash, data []byte, hashNonce *hashNonce_T, 
 
 		go hashNonce.countDown()
 
-		go ProcessLogic(head, data, conn)
+		if isSync {
+			ProcessLogic(head, data, conn)
+		} else {
+			go ProcessLogic(head, data, conn)
+		}
 
 	/*
 		用于测试TCP
