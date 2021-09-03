@@ -739,7 +739,8 @@ func Send(conn *net.TCPConn, api int32, body []byte) error {
 		return err
 	}
 
-	err = send(conn, timestamp, random.Bytes(), data)
+	randomI := int32(random.Int64())
+	err = send(conn, timestamp, int32ToBytes(randomI), data)
 	if err != nil {
 		return err
 	}
